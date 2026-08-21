@@ -1,65 +1,36 @@
 package com.example.diffviewer
 
+import android.content.Context
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.tooling.preview.Preview
-import androidx.compose.ui.unit.dp
-import com.example.diffviewer.ui.theme.DiffViewerTheme
+import androidx.lifecycle.lifecycleScope
+import com.example.diffviewer.core.data.SharedPreferencesConnectionSettingsRepository
+import com.example.diffviewer.core.data.TermuxDiffRepository
+import com.example.diffviewer.core.designsystem.DiffViewerTheme
+import com.example.diffviewer.core.domain.AppStore
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        val connectionSettingsRepository = SharedPreferencesConnectionSettingsRepository(
+            getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE)
+        )
+        val appStore = AppStore(
+            diffRepository = TermuxDiffRepository(),
+            connectionSettingsRepository = connectionSettingsRepository,
+            coroutineScope = lifecycleScope,
+        )
+
         setContent {
             DiffViewerTheme {
-                Surface(modifier = Modifier.fillMaxSize()) {
-                    DiffViewerScreen()
-                }
+                DiffViewerApplication(appStore = appStore, coroutineScope = lifecycleScope)
             }
         }
     }
-}
 
-@Composable
-private fun DiffViewerScreen() {
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(24.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Text(
-                text = "Diff Viewer",
-                style = MaterialTheme.typography.headlineMedium,
-            )
-            Text(
-                text = "プロジェクトの準備ができました",
-                style = MaterialTheme.typography.bodyLarge,
-            )
-        }
+    private companion object {
+        const val PREFERENCES_NAME = "diff_viewer"
     }
 }
-
-@Preview(showBackground = true)
-@Composable
-private fun DiffViewerScreenPreview() {
-    DiffViewerTheme {
-        DiffViewerScreen()
-    }
-}
-
