@@ -2,12 +2,12 @@ name: Build Android APK
 
 on:
   push:
-    branches: [main]
+    branches: [develop]
   pull_request:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build:
@@ -63,3 +63,44 @@ jobs:
           name: diff-viewer-debug-apk
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
+
+      - name: Publish debug APK release
+        if: >-
+          github.event_name == 'workflow_dispatch' ||
+          (github.event_name == 'push' && github.ref == 'refs/heads/develop')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          release_tag="debug-${GITHUB_RUN_NUMBER}"
+          apk_name="diff-viewer-debug-${GITHUB_RUN_NUMBER}.apk"
+          apk_path="$RUNNER_TEMP/$apk_name"
+          cp app/build/outputs/apk/debug/app-debug.apk "$apk_path"
+          gh release create "$release_tag" "$apk_path" \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --title "Diff Viewer Debug #${GITHUB_RUN_NUMBER}" \
+            --notes "Signed debug APK for commit $GITHUB_SHA" \
+            --prerelease
+          echo "APK_DOWNLOAD_URL=https://github.com/$GITHUB_REPOSITORY/releases/download/$release_tag/$apk_name" >> "$GITHUB_ENV"
+
+      - name: Notify Slack of debug APK
+        if: >-
+          github.event_name == 'workflow_dispatch' ||
+          (github.event_name == 'push' && github.ref == 'refs/heads/develop')
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_ANDROID_APK_WEBHOOK_URL }}
+        run: |
+          test -n "$SLACK_WEBHOOK_URL"
+          short_sha="${GITHUB_SHA:0:7}"
+          actions_url="https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          payload="$(jq -n \
+            --arg apk_url "$APK_DOWNLOAD_URL" \
+            --arg actions_url "$actions_url" \
+            --arg repository "$GITHUB_REPOSITORY" \
+            --arg commit "$short_sha" \
+            --arg build_number "$GITHUB_RUN_NUMBER" \
+            '{text: ("✅ Diff Viewer Android #" + $build_number + "\nRepository: " + $repository + "\nCommit: `" + $commit + "`\n<" + $apk_url + "|APKをダウンロード>\n<" + $actions_url + "|ビルド詳細を見る>")}')"
+          curl --fail --silent --show-error \
+            -H "Content-Type: application/json" \
+            --data "$payload" \
+            "$SLACK_WEBHOOK_URL"
