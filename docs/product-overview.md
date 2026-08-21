@@ -127,10 +127,12 @@ The first useful version will target this repository and provide:
 8. A shared 8–24sp font-size control for single-file and all-files diff views.
 9. Shared, persistent addition/deletion background and text colors with standard, deep, blue, dark, and
    high-contrast presets plus validated custom ARGB hexadecimal values.
-10. Manual refresh after Termux or Codex changes files.
-11. Clear empty, loading, helper-unavailable, and Git-error states.
-12. A switch between uncommitted changes and the latest commit.
-13. Automatic latest-commit selection when the working tree has no changes.
+10. Lightweight Kotlin syntax highlighting for `.kt` and `.kts` diff lines, including keywords, strings,
+    characters, comments, numbers, and annotations.
+11. Manual refresh after Termux or Codex changes files.
+12. Clear empty, loading, helper-unavailable, and Git-error states.
+13. A switch between uncommitted changes and the latest commit.
+14. Automatic latest-commit selection when the working tree has no changes.
 
 Untracked files must be represented explicitly. Plain `git diff` does not include their contents, so the Termux
 helper must handle them separately rather than making them silently disappear.
@@ -163,7 +165,13 @@ The Android application must:
 - Apply the current session's diff font size consistently to single-file and all-files views.
 - Apply one persisted diff color palette to both diff views. Preserve `+` and `-` prefixes so color is never the
   only carrier of addition and deletion meaning.
+- Select light or dark Kotlin token colors from the effective row background so custom diff palettes remain
+  readable. Cache tokenization per visible line rather than reparsing on every recomposition.
 - Never imply that a file is unchanged when its data could not be loaded.
+
+Kotlin highlighting is intentionally lexical and line-based. A diff hunk may begin inside a multiline comment or
+triple-quoted string whose opening delimiter is outside the response, so those cross-line constructs cannot always
+be classified perfectly. Highlighting must never alter or hide the source text returned by the helper.
 
 ## Out of scope for the initial version
 
