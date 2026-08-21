@@ -28,6 +28,7 @@ fun rememberSyntaxHighlightedText(
             prefix = prefix,
             sourceLine = sourceLine,
             isKotlinSource = isKotlinSource,
+            baseTextColor = baseTextColor,
             backgroundColor = backgroundColor,
         )
     }
@@ -37,6 +38,7 @@ internal fun createSyntaxHighlightedText(
     prefix: String,
     sourceLine: String,
     isKotlinSource: Boolean,
+    baseTextColor: Color,
     backgroundColor: Color,
 ): AnnotatedString {
     val syntaxTokens = if (isKotlinSource) kotlinSyntaxLexer.tokenizeLine(sourceLine) else emptyList()
@@ -44,6 +46,11 @@ internal fun createSyntaxHighlightedText(
     return buildAnnotatedString {
         append(prefix)
         append(sourceLine)
+        addStyle(
+            style = SpanStyle(color = baseTextColor),
+            start = 0,
+            end = length,
+        )
         syntaxTokens.forEach { syntaxToken ->
             addStyle(
                 style = syntaxToken.toSpanStyle(syntaxColorScheme),
