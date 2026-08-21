@@ -19,6 +19,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -26,6 +27,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -58,6 +60,16 @@ fun DiffViewerScreen(
     var endpoint by rememberSaveable { mutableStateOf(initialEndpoint) }
     var token by rememberSaveable { mutableStateOf(initialToken) }
     var selectedFile by remember { mutableStateOf<SelectedFile?>(null) }
+    var selectedView by rememberSaveable { mutableStateOf(DiffView.WORKING_TREE) }
+
+    LaunchedEffect(repositoryDiff) {
+        if (
+            repositoryDiff?.changedFileCount == 0 &&
+            repositoryDiff.latestCommit.fileDiffItems.isNotEmpty()
+        ) {
+            selectedView = DiffView.LATEST_COMMIT
+        }
+    }
 
     Surface(modifier = Modifier.fillMaxSize()) {
         if (selectedFile == null) {
@@ -67,11 +79,13 @@ fun DiffViewerScreen(
                 repositoryDiff = repositoryDiff,
                 isLoading = isLoading,
                 errorMessage = errorMessage,
+                selectedView = selectedView,
                 onEndpointChange = { endpoint = it },
                 onTokenChange = { token = it },
                 onRefresh = { onRefresh(endpoint, token) },
-                onFileSelected = { sectionKind, fileDiff ->
-                    selectedFile = SelectedFile(sectionKind, fileDiff)
+                onViewSelected = { selectedView = it },
+                onFileSelected = { sectionLabel, fileDiff ->
+                    selectedFile = SelectedFile(sectionLabel, fileDiff)
                 },
             )
         } else {
@@ -90,10 +104,12 @@ private fun RepositoryScreen(
     repositoryDiff: RepositoryDiff?,
     isLoading: Boolean,
     errorMessage: String?,
+    selectedView: DiffView,
     onEndpointChange: (String) -> Unit,
     onTokenChange: (String) -> Unit,
     onRefresh: () -> Unit,
-    onFileSelected: (DiffSectionKind, FileDiff) -> Unit,
+    onViewSelected: (DiffView) -> Unit,
+    onFileSelected: (String, FileDiff) -> Unit,
 ) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -124,38 +140,111 @@ private fun RepositoryScreen(
         }
         if (repositoryDiff != null) {
             item { RepositorySummary(repositoryDiff) }
-            repositoryDiff.sections.forEach { section ->
-                if (section.fileDiffItems.isNotEmpty()) {
-                    item {
-                        Text(
-                            text = section.kind.displayName(),
-                            style = MaterialTheme.typography.titleMedium,
-                        )
-                    }
-                    items(
-                        items = section.fileDiffItems,
-                        key = { fileDiff -> "${section.kind}:${fileDiff.displayPath}" },
-                    ) { fileDiff ->
-                        FileCard(
-                            fileDiff = fileDiff,
-                            onClick = { onFileSelected(section.kind, fileDiff) },
-                        )
+            item {
+                DiffViewSelector(
+                    selectedView = selectedView,
+                    onViewSelected = onViewSelected,
+                )
+            }
+            if (selectedView == DiffView.WORKING_TREE) {
+                repositoryDiff.sections.forEach { section ->
+                    if (section.fileDiffItems.isNotEmpty()) {
+                        item {
+                            Text(
+                                text = section.kind.displayName(),
+                                style = MaterialTheme.typography.titleMedium,
+                            )
+                        }
+                        items(
+                            items = section.fileDiffItems,
+                            key = { fileDiff -> "${section.kind}:${fileDiff.displayPath}" },
+                        ) { fileDiff ->
+                            FileCard(
+                                fileDiff = fileDiff,
+                                onClick = {
+                                    onFileSelected(section.kind.displayName(), fileDiff)
+                                },
+                            )
+                        }
                     }
                 }
-            }
-            if (repositoryDiff.changedFileCount == 0) {
+                if (repositoryDiff.changedFileCount == 0) {
+                    item {
+                        EmptyMessage("未コミットの変更はありません")
+                    }
+                }
+            } else {
                 item {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 32.dp),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Text("変更はありません")
+                    LatestCommitSummary(repositoryDiff)
+                }
+                items(
+                    items = repositoryDiff.latestCommit.fileDiffItems,
+                    key = { fileDiff -> "latest:${fileDiff.displayPath}" },
+                ) { fileDiff ->
+                    FileCard(
+                        fileDiff = fileDiff,
+                        onClick = {
+                            onFileSelected("最新コミット", fileDiff)
+                        },
+                    )
+                }
+                if (repositoryDiff.latestCommit.fileDiffItems.isEmpty()) {
+                    item {
+                        EmptyMessage("最新コミットに表示できる変更はありません")
                     }
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun DiffViewSelector(
+    selectedView: DiffView,
+    onViewSelected: (DiffView) -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        DiffView.entries.forEach { diffView ->
+            FilterChip(
+                selected = selectedView == diffView,
+                onClick = { onViewSelected(diffView) },
+                label = { Text(diffView.displayName()) },
+            )
+        }
+    }
+}
+
+@Composable
+private fun LatestCommitSummary(repositoryDiff: RepositoryDiff) {
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text("最新コミット", style = MaterialTheme.typography.labelLarge)
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                repositoryDiff.latestCommit.subject,
+                style = MaterialTheme.typography.titleMedium,
+            )
+            Text(
+                repositoryDiff.latestCommit.id.take(8),
+                fontFamily = FontFamily.Monospace,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+@Composable
+private fun EmptyMessage(message: String) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 32.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(message)
     }
 }
 
@@ -291,7 +380,7 @@ private fun FileDiffScreen(selectedFile: SelectedFile, onBack: () -> Unit) {
                     fontFamily = FontFamily.Monospace,
                 )
                 Text(
-                    selectedFile.sectionKind.displayName(),
+                    selectedFile.sectionLabel,
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -394,9 +483,19 @@ private fun DiffLineRow(
 }
 
 private data class SelectedFile(
-    val sectionKind: DiffSectionKind,
+    val sectionLabel: String,
     val fileDiff: FileDiff,
 )
+
+private enum class DiffView {
+    WORKING_TREE,
+    LATEST_COMMIT,
+}
+
+private fun DiffView.displayName(): String = when (this) {
+    DiffView.WORKING_TREE -> "未コミット"
+    DiffView.LATEST_COMMIT -> "最新コミット"
+}
 
 private fun DiffSectionKind.displayName(): String = when (this) {
     DiffSectionKind.UNSTAGED -> "未ステージ"

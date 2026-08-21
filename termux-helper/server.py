@@ -89,10 +89,33 @@ def build_repository_diff(repository: Path) -> dict[str, Any]:
         "-z",
         text=False,
     )
+    latest_commit_output = str(
+        git_command_runner.run("log", "-1", "--format=%H%x00%s")
+    ).rstrip("\n")
+    latest_commit_id, latest_commit_subject = latest_commit_output.split("\0", maxsplit=1)
+    latest_commit_patch = str(
+        git_command_runner.run(
+            "-c",
+            "core.quotePath=false",
+            "show",
+            "--format=",
+            "--diff-merges=first-parent",
+            "--find-renames",
+            "--no-ext-diff",
+            "--no-color",
+            "--unified=3",
+            "HEAD",
+        )
+    )
 
     return {
         "repository": str(repository_root),
         "branch": branch_output,
+        "latestCommit": {
+            "id": latest_commit_id,
+            "subject": latest_commit_subject,
+            "files": parse_unified_diff(latest_commit_patch),
+        },
         "sections": [
             {"kind": "unstaged", "files": parse_unified_diff(unstaged_patch)},
             {"kind": "staged", "files": parse_unified_diff(staged_patch)},

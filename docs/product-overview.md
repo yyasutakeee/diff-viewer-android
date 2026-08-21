@@ -48,9 +48,10 @@ The helper listens on `127.0.0.1:8765` by default and exposes `GET /api/v1/diff`
 the configured token in the `Authorization: Bearer <token>` header. Both the Android client and helper restrict
 communication to the loopback interface.
 
-The response is JSON organized as repository, branch, and three sections: `unstaged`, `staged`, and `untracked`.
-Each section contains files, each file contains hunks, and each hunk contains typed lines with old and new line
-numbers. Supported line types are `context`, `addition`, `deletion`, and `meta`.
+The response is JSON organized as repository, branch, latest commit, and three working-tree sections: `unstaged`,
+`staged`, and `untracked`. The latest commit contains its full ID, subject, and first-parent patch. Each section or
+commit contains files, each file contains hunks, and each hunk contains typed lines with old and new line numbers.
+Supported line types are `context`, `addition`, `deletion`, and `meta`.
 
 The Android application stores the endpoint and token in its private preferences for convenience. They are not
 written to the Git repository.
@@ -78,6 +79,8 @@ The first useful version will target this repository and provide:
 6. Vertical scrolling for the full diff and horizontal scrolling for long source lines.
 7. Manual refresh after Termux or Codex changes files.
 8. Clear empty, loading, helper-unavailable, and Git-error states.
+9. A switch between uncommitted changes and the latest commit.
+10. Automatic latest-commit selection when the working tree has no changes.
 
 Untracked files must be represented explicitly. Plain `git diff` does not include their contents, so the Termux
 helper must handle them separately rather than making them silently disappear.
@@ -90,6 +93,7 @@ The helper is part of the product even though it runs outside the APK. It must:
 - Allow only configured repository paths.
 - Run Git with a fixed argument set instead of concatenating user-controlled shell commands.
 - Obtain repository status, staged diff, unstaged diff, and untracked-file information.
+- Obtain the latest commit metadata and its first-parent diff, including the repository's initial commit.
 - Convert Git output into a structured response that preserves file boundaries, hunks, line types, and line
   numbers.
 - Reject requests without the configured bearer token.

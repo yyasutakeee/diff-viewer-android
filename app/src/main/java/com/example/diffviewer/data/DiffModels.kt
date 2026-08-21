@@ -6,11 +6,18 @@ import org.json.JSONObject
 data class RepositoryDiff(
     val repository: String,
     val branch: String,
+    val latestCommit: LatestCommit,
     val sections: List<DiffSection>,
 ) {
     val changedFileCount: Int
         get() = sections.sumOf { it.fileDiffItems.size }
 }
+
+data class LatestCommit(
+    val id: String,
+    val subject: String,
+    val fileDiffItems: List<FileDiff>,
+)
 
 data class DiffSection(
     val kind: DiffSectionKind,
@@ -72,7 +79,16 @@ fun parseRepositoryDiff(jsonText: String): RepositoryDiff {
     return RepositoryDiff(
         repository = rootObject.getString("repository"),
         branch = rootObject.getString("branch"),
+        latestCommit = parseLatestCommit(rootObject.getJSONObject("latestCommit")),
         sections = rootObject.getJSONArray("sections").mapObjects(::parseDiffSection),
+    )
+}
+
+private fun parseLatestCommit(jsonObject: JSONObject): LatestCommit {
+    return LatestCommit(
+        id = jsonObject.getString("id"),
+        subject = jsonObject.getString("subject"),
+        fileDiffItems = jsonObject.getJSONArray("files").mapObjects(::parseFileDiff),
     )
 }
 

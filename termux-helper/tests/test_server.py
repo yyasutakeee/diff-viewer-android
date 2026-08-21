@@ -80,6 +80,33 @@ class RepositoryDiffTests(unittest.TestCase):
         self.assertEqual((deletion["oldLine"], deletion["newLine"]), (2, None))
         self.assertEqual((addition["oldLine"], addition["newLine"]), (None, 2))
 
+    def test_returns_latest_commit_metadata_and_diff(self) -> None:
+        repository_diff = SERVER.build_repository_diff(self.repository)
+
+        latest_commit = repository_diff["latestCommit"]
+        self.assertEqual(latest_commit["subject"], "Initial")
+        self.assertEqual(len(latest_commit["id"]), 40)
+        self.assertEqual(latest_commit["files"][0]["newPath"], "sample.txt")
+        self.assertEqual(latest_commit["files"][0]["status"], "added")
+        self.assertEqual(
+            [
+                line["content"]
+                for line in latest_commit["files"][0]["hunks"][0]["lines"]
+            ],
+            ["first", "second"],
+        )
+
+    def test_latest_commit_is_independent_of_working_tree_changes(self) -> None:
+        (self.repository / "sample.txt").write_text("working tree\n", encoding="utf-8")
+
+        repository_diff = SERVER.build_repository_diff(self.repository)
+
+        latest_commit_lines = repository_diff["latestCommit"]["files"][0]["hunks"][0]["lines"]
+        self.assertEqual(
+            [line["content"] for line in latest_commit_lines],
+            ["first", "second"],
+        )
+
     def test_marks_binary_untracked_file_without_returning_content(self) -> None:
         (self.repository / "binary.dat").write_bytes(b"before\0after")
 
