@@ -64,26 +64,29 @@ The Android client applies unidirectional state flow with enforceable Gradle mod
 flowchart LR
     RU[":feature:repository<br/>Repository UI contract"] --> A[":app<br/>Composition and adapters"]
     FU[":feature:filediff<br/>File diff UI contract"] --> A
+    AU[":feature:alldiffs<br/>All-files diff UI contract"] --> A
     A --> S[":core:domain<br/>AppState and AppStore"]
     A --> D[":core:data<br/>Termux and preferences"]
     D --> S
     RU --> DS[":core:designsystem"]
-    FU --> DS
+    FU --> DU[":core:diffui<br/>Shared diff presentation"]
+    AU --> DU
+    DU --> DS
 ```
 
-The arrows show runtime communication; compile-time feature dependencies point only toward
-`:core:designsystem`. The application module is the only boundary that knows both feature display contracts and
-domain values.
+The arrows show runtime communication. Compile-time feature dependencies point only toward
+`:core:designsystem`, or toward the presentation-only `:core:diffui` module for screens that render diffs. The
+application module is the only boundary that knows both feature display contracts and domain values.
 
 - `data class AppState` is the single shared-state snapshot.
 - `class AppStore` privately owns the mutable state flow and exposes a read-only state flow.
 - `class AppStore` actions are the only shared-state mutation entry points.
 - `interface DiffRepository` and `interface ConnectionSettingsRepository` are owned by the domain; concrete HTTP,
   JSON, and SharedPreferences implementations live in `:core:data`.
-- `interface RepositoryViewModel` and `interface FileDiffViewModel` expose feature-owned display state and one
-  `send(event)` input each. Their concrete adapters live in `:app`.
+- `interface RepositoryViewModel`, `interface FileDiffViewModel`, and `interface AllDiffsViewModel` expose
+  feature-owned display state and one `send(event)` input each. Their concrete adapters live in `:app`.
 - Repository selection and form editing remain presentation state rather than entering the domain snapshot.
-- Each full screen has its own feature module, and neither feature imports domain or data types.
+- Each full screen has its own feature module, and no feature imports domain or data types.
 
 ### APK signing
 
@@ -119,11 +122,13 @@ The first useful version will target this repository and provide:
 3. A list of changed files with status and addition/deletion counts when available.
 4. A selectable file detail view.
 5. A unified line diff with prefixes, line numbers, and red/green styling.
-6. Vertical scrolling for the full diff and horizontal scrolling for long source lines.
-7. Manual refresh after Termux or Codex changes files.
-8. Clear empty, loading, helper-unavailable, and Git-error states.
-9. A switch between uncommitted changes and the latest commit.
-10. Automatic latest-commit selection when the working tree has no changes.
+6. A continuously scrollable view containing every changed file in the selected working-tree or latest-commit source.
+7. Visual line wrapping for source text that exceeds the available screen width without modifying its content.
+8. A shared 8–24sp font-size control for single-file and all-files diff views.
+9. Manual refresh after Termux or Codex changes files.
+10. Clear empty, loading, helper-unavailable, and Git-error states.
+11. A switch between uncommitted changes and the latest commit.
+12. Automatic latest-commit selection when the working tree has no changes.
 
 Untracked files must be represented explicitly. Plain `git diff` does not include their contents, so the Termux
 helper must handle them separately rather than making them silently disappear.
@@ -152,6 +157,8 @@ The Android application must:
 - Keep the UI responsive when parsing and rendering large diffs.
 - Use lazy lists or equivalent virtualization so the entire diff is not composed at once.
 - Preserve source text exactly where practical, including indentation and empty lines.
+- Wrap long source lines visually within the screen while preserving their underlying text.
+- Apply the current session's diff font size consistently to single-file and all-files views.
 - Never imply that a file is unchanged when its data could not be loaded.
 
 ## Out of scope for the initial version

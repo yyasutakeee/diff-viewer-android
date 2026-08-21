@@ -10,6 +10,12 @@ interface RepositoryViewModel {
 sealed interface RepositoryEvent {
     data class Refresh(val endpoint: String, val token: String) : RepositoryEvent
     data class OpenFile(val fileId: String) : RepositoryEvent
+    data class OpenAllDiffs(val repositoryDiffSource: RepositoryDiffSource) : RepositoryEvent
+}
+
+enum class RepositoryDiffSource {
+    WORKING_TREE,
+    LATEST_COMMIT,
 }
 
 data class RepositoryUiState(

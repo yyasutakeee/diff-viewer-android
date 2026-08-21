@@ -82,6 +82,19 @@ fun RepositoryScreen(viewModel: RepositoryViewModel) {
         if (repositoryUiState.repositoryName != null) {
             item { RepositorySummary(repositoryUiState) }
             item { DiffSourceSelector(selectedSource) { selectedSource = it } }
+            item {
+                Button(
+                    onClick = {
+                        viewModel.send(
+                            RepositoryEvent.OpenAllDiffs(selectedSource.toRepositoryDiffSource())
+                        )
+                    },
+                    enabled = repositoryUiState.hasFiles(selectedSource),
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text("すべての差分を見る")
+                }
+            }
             when (selectedSource) {
                 DiffSource.WORKING_TREE -> workingTreeItems(repositoryUiState, viewModel)
                 DiffSource.LATEST_COMMIT -> latestCommitItems(repositoryUiState, viewModel)
@@ -244,4 +257,16 @@ private fun EmptyMessage(message: String) {
 private enum class DiffSource(val title: String) {
     WORKING_TREE("未コミット"),
     LATEST_COMMIT("最新コミット"),
+}
+
+private fun DiffSource.toRepositoryDiffSource(): RepositoryDiffSource = when (this) {
+    DiffSource.WORKING_TREE -> RepositoryDiffSource.WORKING_TREE
+    DiffSource.LATEST_COMMIT -> RepositoryDiffSource.LATEST_COMMIT
+}
+
+private fun RepositoryUiState.hasFiles(diffSource: DiffSource): Boolean = when (diffSource) {
+    DiffSource.WORKING_TREE -> workingTreeSectionItems.any { diffSectionUiItem ->
+        diffSectionUiItem.fileItems.isNotEmpty()
+    }
+    DiffSource.LATEST_COMMIT -> latestCommit?.fileItems?.isNotEmpty() == true
 }

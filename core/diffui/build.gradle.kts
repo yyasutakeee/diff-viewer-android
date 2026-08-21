@@ -4,7 +4,7 @@ plugins {
 }
 
 android {
-    namespace = "com.example.diffviewer.feature.filediff"
+    namespace = "com.example.diffviewer.core.diffui"
     compileSdk = 37
 
     defaultConfig {
@@ -25,10 +25,7 @@ dependencies {
     val composeBom = platform("androidx.compose:compose-bom:2026.08.00")
     implementation(composeBom)
     implementation(project(":core:designsystem"))
-    implementation(project(":core:diffui"))
     implementation("androidx.compose.foundation:foundation")
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.ui:ui")
-    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.10.0")
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.2")
 }
