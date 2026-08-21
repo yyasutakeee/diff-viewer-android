@@ -30,7 +30,7 @@ class TermuxDiffClient {
                     JSONObject(responseText).optString("error")
                 }.getOrDefault("")
                 throw IOException(
-                    serverMessage.ifBlank { "ヘルパーがHTTP $responseCodeを返しました" }
+                    serverMessage.ifBlank { "ヘルパーがHTTP ${responseCode}を返しました" }
                 )
             }
             return parseRepositoryDiff(responseText)
