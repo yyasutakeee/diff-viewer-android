@@ -1,6 +1,7 @@
 package com.example.diffviewer
 
 import com.example.diffviewer.core.diffui.DiffDisplayConfiguration
+import com.example.diffviewer.core.diffui.DiffColorPalette
 import com.example.diffviewer.feature.filediff.FileDiffEvent
 import com.example.diffviewer.feature.filediff.FileDiffUiState
 import com.example.diffviewer.feature.filediff.FileDiffViewModel
@@ -11,15 +12,20 @@ import kotlinx.coroutines.flow.asStateFlow
 class FileDiffViewModelAdapter(
     fileDiffSelectionTarget: FileDiffSelectionTarget,
     fontSizeSp: Int,
+    diffColorPalette: DiffColorPalette,
     private val navigateBack: () -> Unit,
     private val decreaseFontSize: () -> Unit,
     private val increaseFontSize: () -> Unit,
+    private val updateColorPalette: (DiffColorPalette) -> Unit,
 ) : FileDiffViewModel {
     private val mutableState = MutableStateFlow(
         FileDiffUiState(
             sourceLabel = fileDiffSelectionTarget.sourceLabel,
             diffFileDisplay = fileDiffSelectionTarget.fileDiff.toDiffFileDisplay("selected-file"),
-            diffDisplayConfiguration = createDiffDisplayConfiguration(fontSizeSp),
+            diffDisplayConfiguration = createDiffDisplayConfiguration(
+                fontSizeSp = fontSizeSp,
+                diffColorPalette = diffColorPalette,
+            ),
         )
     )
 
@@ -30,15 +36,20 @@ class FileDiffViewModelAdapter(
             FileDiffEvent.NavigateBack -> navigateBack()
             FileDiffEvent.DecreaseFontSize -> decreaseFontSize()
             FileDiffEvent.IncreaseFontSize -> increaseFontSize()
+            is FileDiffEvent.UpdateColorPalette -> updateColorPalette(event.diffColorPalette)
         }
     }
 }
 
-fun createDiffDisplayConfiguration(fontSizeSp: Int): DiffDisplayConfiguration {
+fun createDiffDisplayConfiguration(
+    fontSizeSp: Int,
+    diffColorPalette: DiffColorPalette,
+): DiffDisplayConfiguration {
     return DiffDisplayConfiguration(
         fontSizeSp = fontSizeSp,
         canDecreaseFontSize = fontSizeSp > MINIMUM_DIFF_FONT_SIZE_SP,
         canIncreaseFontSize = fontSizeSp < MAXIMUM_DIFF_FONT_SIZE_SP,
+        colorPalette = diffColorPalette,
     )
 }
 

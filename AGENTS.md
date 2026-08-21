@@ -15,7 +15,8 @@ Android app displays changes; Git remains the source of truth in Termux.
 ## Repository architecture
 
 - `:app` is the composition root. It creates concrete repositories and the single `class AppStore`, owns screen
-  navigation, and contains the concrete domain-to-feature view-model adapters.
+  navigation, contains the concrete domain-to-feature view-model adapters, and persists presentation-only diff
+  display preferences without placing them in domain state.
 - `:feature:repository` owns the repository summary and changed-file list screen, its `interface RepositoryViewModel`,
   `sealed interface RepositoryEvent`, and display-only UI state.
 - `:feature:filediff` owns the full file-diff screen, its `interface FileDiffViewModel`, `sealed interface FileDiffEvent`,
@@ -26,9 +27,12 @@ Android app displays changes; Git remains the source of truth in Termux.
 - `:core:data` implements Termux HTTP/JSON access and private-preference storage behind domain-owned interfaces.
 - `:core:designsystem` owns the Compose theme and reusable diff colors.
 - `:core:diffui` owns presentation-only diff display values and reusable line, hunk, file, wrapping, and font-size
-  controls shared by the single-file and all-files feature screens. It must not contain domain records or I/O.
+  controls shared by the single-file and all-files feature screens. It also owns diff color palettes, presets,
+  validation, previews, and the color-settings sheet. It must not contain domain records or I/O.
 
 Do not move HTTP, JSON, SharedPreferences, or domain records into a feature module. Do not let a feature depend on
 `:app`, `:core:domain`, `:core:data`, or another feature. A diff-rendering feature may depend on `:core:diffui`;
 other feature dependencies remain limited to `:core:designsystem`. All feature events pass through the feature's
 single `send(event)` surface, and all shared-state changes pass through verb-named `AppStore` actions.
+Diff color changes pass through the same feature event surface to the application-owned
+`class DiffDisplaySettingsStore`, which is the only type allowed to persist those presentation preferences.

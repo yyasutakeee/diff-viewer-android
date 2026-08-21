@@ -14,9 +14,9 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        val connectionSettingsRepository = SharedPreferencesConnectionSettingsRepository(
-            getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE)
-        )
+        val sharedPreferences = getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE)
+        val connectionSettingsRepository = SharedPreferencesConnectionSettingsRepository(sharedPreferences)
+        val diffDisplaySettingsStore = DiffDisplaySettingsStore(sharedPreferences)
         val appStore = AppStore(
             diffRepository = TermuxDiffRepository(),
             connectionSettingsRepository = connectionSettingsRepository,
@@ -25,7 +25,11 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             DiffViewerTheme {
-                DiffViewerApplication(appStore = appStore, coroutineScope = lifecycleScope)
+                DiffViewerApplication(
+                    appStore = appStore,
+                    diffDisplaySettingsStore = diffDisplaySettingsStore,
+                    coroutineScope = lifecycleScope,
+                )
             }
         }
     }

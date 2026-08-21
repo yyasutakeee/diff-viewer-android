@@ -32,6 +32,9 @@ fun AllDiffsScreen(viewModel: AllDiffsViewModel) {
             diffDisplayConfiguration = allDiffsUiState.diffDisplayConfiguration,
             decreaseFontSize = { viewModel.send(AllDiffsEvent.DecreaseFontSize) },
             increaseFontSize = { viewModel.send(AllDiffsEvent.IncreaseFontSize) },
+            updateColorPalette = { diffColorPalette ->
+                viewModel.send(AllDiffsEvent.UpdateColorPalette(diffColorPalette))
+            },
         )
         HorizontalDivider()
         LazyColumn(modifier = Modifier.fillMaxSize()) {
@@ -50,6 +53,7 @@ fun AllDiffsScreen(viewModel: AllDiffsViewModel) {
                     diffFileContent(
                         diffFileDisplay = diffFileDisplay,
                         fontSizeSp = allDiffsUiState.diffDisplayConfiguration.fontSizeSp,
+                        colorPalette = allDiffsUiState.diffDisplayConfiguration.colorPalette,
                         showFileHeader = true,
                     )
                 }

@@ -1,5 +1,6 @@
 package com.example.diffviewer
 
+import com.example.diffviewer.core.diffui.DiffColorPalette
 import com.example.diffviewer.feature.alldiffs.AllDiffsEvent
 import com.example.diffviewer.feature.alldiffs.AllDiffsUiState
 import com.example.diffviewer.feature.alldiffs.AllDiffsViewModel
@@ -11,9 +12,11 @@ import kotlinx.coroutines.flow.asStateFlow
 class AllDiffsViewModelAdapter(
     allDiffsSelectionTarget: AllDiffsSelectionTarget,
     fontSizeSp: Int,
+    diffColorPalette: DiffColorPalette,
     private val navigateBack: () -> Unit,
     private val decreaseFontSize: () -> Unit,
     private val increaseFontSize: () -> Unit,
+    private val updateColorPalette: (DiffColorPalette) -> Unit,
 ) : AllDiffsViewModel {
     private val mutableState = MutableStateFlow(
         AllDiffsUiState(
@@ -27,7 +30,10 @@ class AllDiffsViewModelAdapter(
                     },
                 )
             },
-            diffDisplayConfiguration = createDiffDisplayConfiguration(fontSizeSp),
+            diffDisplayConfiguration = createDiffDisplayConfiguration(
+                fontSizeSp = fontSizeSp,
+                diffColorPalette = diffColorPalette,
+            ),
         )
     )
 
@@ -38,6 +44,7 @@ class AllDiffsViewModelAdapter(
             AllDiffsEvent.NavigateBack -> navigateBack()
             AllDiffsEvent.DecreaseFontSize -> decreaseFontSize()
             AllDiffsEvent.IncreaseFontSize -> increaseFontSize()
+            is AllDiffsEvent.UpdateColorPalette -> updateColorPalette(event.diffColorPalette)
         }
     }
 }
