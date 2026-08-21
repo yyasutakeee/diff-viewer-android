@@ -10,6 +10,7 @@ import com.example.diffviewer.feature.repository.DiffSectionUiItem
 import com.example.diffviewer.feature.repository.FileDiffUiItem
 import com.example.diffviewer.feature.repository.LatestCommitUiItem
 import com.example.diffviewer.feature.repository.RepositoryEvent
+import com.example.diffviewer.feature.repository.RepositoryDiffSource
 import com.example.diffviewer.feature.repository.RepositoryUiState
 import com.example.diffviewer.feature.repository.RepositoryViewModel
 import kotlinx.coroutines.CoroutineScope
@@ -22,18 +23,22 @@ class RepositoryViewModelAdapter(
     private val appStore: AppStore,
     coroutineScope: CoroutineScope,
     private val openFile: (FileDiffSelectionTarget) -> Unit,
+    private val openAllDiffs: (AllDiffsSelectionTarget) -> Unit,
 ) : RepositoryViewModel {
-    private val mutableState = MutableStateFlow(mapRepositoryUiState(appStore.state.value).first)
-    private var fileDiffSelectionTargetsById = mapRepositoryUiState(appStore.state.value).second
+    private val initialRepositoryUiMapping = mapRepositoryUiState(appStore.state.value)
+    private val mutableState = MutableStateFlow(initialRepositoryUiMapping.repositoryUiState)
+    private var fileDiffSelectionTargetsById = initialRepositoryUiMapping.fileDiffSelectionTargetsById
+    private var allDiffsSelectionTargetsBySource = initialRepositoryUiMapping.allDiffsSelectionTargetsBySource
 
     override val state: StateFlow<RepositoryUiState> = mutableState.asStateFlow()
 
     init {
         coroutineScope.launch {
             appStore.state.collect { appState ->
-                val (repositoryUiState, selectionTargetsById) = mapRepositoryUiState(appState)
-                fileDiffSelectionTargetsById = selectionTargetsById
-                mutableState.value = repositoryUiState
+                val repositoryUiMapping = mapRepositoryUiState(appState)
+                fileDiffSelectionTargetsById = repositoryUiMapping.fileDiffSelectionTargetsById
+                allDiffsSelectionTargetsBySource = repositoryUiMapping.allDiffsSelectionTargetsBySource
+                mutableState.value = repositoryUiMapping.repositoryUiState
             }
         }
     }
@@ -44,11 +49,20 @@ class RepositoryViewModelAdapter(
                 ConnectionSettings(endpoint = event.endpoint, token = event.token)
             )
             is RepositoryEvent.OpenFile -> findFileDiffSelectionTarget(event.fileId)?.let(openFile)
+            is RepositoryEvent.OpenAllDiffs -> {
+                findAllDiffsSelectionTarget(event.repositoryDiffSource)?.let(openAllDiffs)
+            }
         }
     }
 
     private fun findFileDiffSelectionTarget(fileId: String): FileDiffSelectionTarget? {
         return fileDiffSelectionTargetsById[fileId]
+    }
+
+    private fun findAllDiffsSelectionTarget(
+        repositoryDiffSource: RepositoryDiffSource,
+    ): AllDiffsSelectionTarget? {
+        return allDiffsSelectionTargetsBySource[repositoryDiffSource]
     }
 }
 
@@ -57,9 +71,26 @@ data class FileDiffSelectionTarget(
     val fileDiff: FileDiff,
 )
 
+data class AllDiffsSelectionTarget(
+    val title: String,
+    val groupSelectionTargets: List<DiffFileGroupSelectionTarget>,
+)
+
+data class DiffFileGroupSelectionTarget(
+    val id: String,
+    val title: String,
+    val fileDiffItems: List<FileDiff>,
+)
+
+private data class RepositoryUiMapping(
+    val repositoryUiState: RepositoryUiState,
+    val fileDiffSelectionTargetsById: Map<String, FileDiffSelectionTarget>,
+    val allDiffsSelectionTargetsBySource: Map<RepositoryDiffSource, AllDiffsSelectionTarget>,
+)
+
 private fun mapRepositoryUiState(
     appState: AppState,
-): Pair<RepositoryUiState, Map<String, FileDiffSelectionTarget>> {
+): RepositoryUiMapping {
     val fileDiffSelectionTargetsById = mutableMapOf<String, FileDiffSelectionTarget>()
     val repositoryDiff = appState.repositoryDiff
     val sectionUiItems = repositoryDiff?.sections.orEmpty().map { diffSection ->
@@ -97,7 +128,42 @@ private fun mapRepositoryUiState(
         isLoading = appState.isLoadingRepositoryDiff,
         errorMessage = appState.repositoryDiffErrorMessage,
     )
-    return repositoryUiState to fileDiffSelectionTargetsById
+    val allDiffsSelectionTargetsBySource = buildAllDiffsSelectionTargets(appState)
+    return RepositoryUiMapping(
+        repositoryUiState = repositoryUiState,
+        fileDiffSelectionTargetsById = fileDiffSelectionTargetsById,
+        allDiffsSelectionTargetsBySource = allDiffsSelectionTargetsBySource,
+    )
+}
+
+private fun buildAllDiffsSelectionTargets(
+    appState: AppState,
+): Map<RepositoryDiffSource, AllDiffsSelectionTarget> {
+    val repositoryDiff = appState.repositoryDiff ?: return emptyMap()
+    val workingTreeGroupSelectionTargets = repositoryDiff.sections
+        .filter { diffSection -> diffSection.fileDiffItems.isNotEmpty() }
+        .map { diffSection ->
+            DiffFileGroupSelectionTarget(
+                id = "working:${diffSection.kind}",
+                title = diffSection.kind.displayName(),
+                fileDiffItems = diffSection.fileDiffItems,
+            )
+        }
+    val latestCommitGroupSelectionTarget = DiffFileGroupSelectionTarget(
+        id = "latest:${repositoryDiff.latestCommit.id}",
+        title = repositoryDiff.latestCommit.subject,
+        fileDiffItems = repositoryDiff.latestCommit.fileDiffItems,
+    )
+    return mapOf(
+        RepositoryDiffSource.WORKING_TREE to AllDiffsSelectionTarget(
+            title = "未コミットのすべての差分",
+            groupSelectionTargets = workingTreeGroupSelectionTargets,
+        ),
+        RepositoryDiffSource.LATEST_COMMIT to AllDiffsSelectionTarget(
+            title = "最新コミットのすべての差分",
+            groupSelectionTargets = listOf(latestCommitGroupSelectionTarget),
+        ),
+    )
 }
 
 private fun FileDiff.toUiItem(fileId: String): FileDiffUiItem = FileDiffUiItem(
