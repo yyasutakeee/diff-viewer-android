@@ -69,6 +69,7 @@ fun LazyListScope.diffFileContent(
     colorPalette: DiffColorPalette,
     showFileHeader: Boolean,
 ) {
+    val isKotlinSource = isKotlinSourcePath(diffFileDisplay.path)
     if (showFileHeader) {
         item(key = "file:${diffFileDisplay.id}") {
             Text(
@@ -116,6 +117,7 @@ fun LazyListScope.diffFileContent(
                     diffLineDisplay = diffLineDisplay,
                     fontSizeSp = fontSizeSp,
                     colorPalette = colorPalette,
+                    isKotlinSource = isKotlinSource,
                 )
             }
         }
@@ -137,6 +139,7 @@ private fun DiffLineRow(
     diffLineDisplay: DiffLineDisplay,
     fontSizeSp: Int,
     colorPalette: DiffColorPalette,
+    isKotlinSource: Boolean,
 ) {
     val backgroundColor = when (diffLineDisplay.kind) {
         DiffLineDisplayKind.ADDITION -> Color(colorPalette.additionBackgroundArgb)
@@ -155,6 +158,17 @@ private fun DiffLineRow(
         DiffLineDisplayKind.CONTEXT -> " "
         DiffLineDisplayKind.META -> "\\"
     }
+    val effectiveBackgroundColor = when (diffLineDisplay.kind) {
+        DiffLineDisplayKind.CONTEXT -> MaterialTheme.colorScheme.surface
+        else -> backgroundColor
+    }
+    val highlightedText = rememberSyntaxHighlightedText(
+        prefix = prefix,
+        sourceLine = diffLineDisplay.content,
+        isKotlinSource = isKotlinSource && diffLineDisplay.kind != DiffLineDisplayKind.META,
+        baseTextColor = textColor,
+        backgroundColor = effectiveBackgroundColor,
+    )
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -165,7 +179,7 @@ private fun DiffLineRow(
         DiffLineNumber(diffLineDisplay.oldLine, fontSizeSp)
         DiffLineNumber(diffLineDisplay.newLine, fontSizeSp)
         Text(
-            text = "$prefix${diffLineDisplay.content}",
+            text = highlightedText,
             modifier = Modifier.weight(1f),
             color = textColor,
             fontFamily = FontFamily.Monospace,

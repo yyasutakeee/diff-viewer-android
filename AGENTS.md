@@ -29,6 +29,8 @@ Android app displays changes; Git remains the source of truth in Termux.
 - `:core:diffui` owns presentation-only diff display values and reusable line, hunk, file, wrapping, and font-size
   controls shared by the single-file and all-files feature screens. It also owns diff color palettes, presets,
   validation, previews, and the color-settings sheet. It must not contain domain records or I/O.
+- `:core:syntaxhighlight` owns UI-independent source tokenization. Its `class KotlinSyntaxLexer` recognizes
+  displayable syntax ranges without importing Compose, Android UI, feature, domain, data, or application modules.
 
 Do not move HTTP, JSON, SharedPreferences, or domain records into a feature module. Do not let a feature depend on
 `:app`, `:core:domain`, `:core:data`, or another feature. A diff-rendering feature may depend on `:core:diffui`;
@@ -36,3 +38,5 @@ other feature dependencies remain limited to `:core:designsystem`. All feature e
 single `send(event)` surface, and all shared-state changes pass through verb-named `AppStore` actions.
 Diff color changes pass through the same feature event surface to the application-owned
 `class DiffDisplaySettingsStore`, which is the only type allowed to persist those presentation preferences.
+`:core:diffui` may depend on `:core:syntaxhighlight` to convert token ranges into styled Compose text. The lexer
+must not know diff line kinds, colors, backgrounds, fonts, or Compose types.
