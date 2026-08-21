@@ -65,9 +65,14 @@ dependencies {
     val composeBom = platform("androidx.compose:compose-bom:2026.08.00")
 
     implementation(composeBom)
+    implementation(project(":core:domain"))
+    implementation(project(":core:data"))
+    implementation(project(":core:designsystem"))
+    implementation(project(":feature:repository"))
+    implementation(project(":feature:filediff"))
     implementation("androidx.activity:activity-compose:1.13.0")
     implementation("androidx.compose.material3:material3")
-    implementation("androidx.compose.ui:ui")
-    implementation("androidx.compose.ui:ui-tooling-preview")
-    debugImplementation("androidx.compose.ui:ui-tooling")
+    implementation("androidx.compose.runtime:runtime")
+    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.10.0")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.2")
 }

@@ -16,4 +16,8 @@ dependencyResolutionManagement {
 
 rootProject.name = "DiffViewer"
 include(":app")
-
+include(":core:domain")
+include(":core:data")
+include(":core:designsystem")
+include(":feature:repository")
+include(":feature:filediff")

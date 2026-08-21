@@ -56,6 +56,35 @@ Supported line types are `context`, `addition`, `deletion`, and `meta`.
 The Android application stores the endpoint and token in its private preferences for convenience. They are not
 written to the Git repository.
 
+### Android module architecture
+
+The Android client applies unidirectional state flow with enforceable Gradle module boundaries:
+
+```mermaid
+flowchart LR
+    RU[":feature:repository<br/>Repository UI contract"] --> A[":app<br/>Composition and adapters"]
+    FU[":feature:filediff<br/>File diff UI contract"] --> A
+    A --> S[":core:domain<br/>AppState and AppStore"]
+    A --> D[":core:data<br/>Termux and preferences"]
+    D --> S
+    RU --> DS[":core:designsystem"]
+    FU --> DS
+```
+
+The arrows show runtime communication; compile-time feature dependencies point only toward
+`:core:designsystem`. The application module is the only boundary that knows both feature display contracts and
+domain values.
+
+- `data class AppState` is the single shared-state snapshot.
+- `class AppStore` privately owns the mutable state flow and exposes a read-only state flow.
+- `class AppStore` actions are the only shared-state mutation entry points.
+- `interface DiffRepository` and `interface ConnectionSettingsRepository` are owned by the domain; concrete HTTP,
+  JSON, and SharedPreferences implementations live in `:core:data`.
+- `interface RepositoryViewModel` and `interface FileDiffViewModel` expose feature-owned display state and one
+  `send(event)` input each. Their concrete adapters live in `:app`.
+- Repository selection and form editing remain presentation state rather than entering the domain snapshot.
+- Each full screen has its own feature module, and neither feature imports domain or data types.
+
 ### APK signing
 
 GitHub Actions signs every Debug APK with one persistent PKCS#12 key stored in GitHub Repository Secrets. The
