@@ -3,6 +3,17 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
+val signingStoreFile = providers.environmentVariable("ANDROID_SIGNING_STORE_FILE").orNull
+val signingStorePassword = providers.environmentVariable("ANDROID_SIGNING_STORE_PASSWORD").orNull
+val signingKeyAlias = providers.environmentVariable("ANDROID_SIGNING_KEY_ALIAS").orNull
+val signingKeyPassword = providers.environmentVariable("ANDROID_SIGNING_KEY_PASSWORD").orNull
+val hasCiSigningConfiguration = listOf(
+    signingStoreFile,
+    signingStorePassword,
+    signingKeyAlias,
+    signingKeyPassword,
+).all { !it.isNullOrBlank() }
+
 android {
     namespace = "com.example.diffviewer"
     compileSdk = 37
@@ -15,7 +26,22 @@ android {
         versionName = "1.0"
     }
 
+    val ciSigningConfig = if (hasCiSigningConfiguration) {
+        signingConfigs.create("ci") {
+            storeFile = file(requireNotNull(signingStoreFile))
+            storePassword = requireNotNull(signingStorePassword)
+            keyAlias = requireNotNull(signingKeyAlias)
+            keyPassword = requireNotNull(signingKeyPassword)
+            storeType = "PKCS12"
+        }
+    } else {
+        null
+    }
+
     buildTypes {
+        debug {
+            ciSigningConfig?.let { signingConfig = it }
+        }
         release {
             isMinifyEnabled = false
             proguardFiles(
@@ -45,4 +71,3 @@ dependencies {
     implementation("androidx.compose.ui:ui-tooling-preview")
     debugImplementation("androidx.compose.ui:ui-tooling")
 }
-

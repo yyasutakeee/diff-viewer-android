@@ -56,6 +56,20 @@ Supported line types are `context`, `addition`, `deletion`, and `meta`.
 The Android application stores the endpoint and token in its private preferences for convenience. They are not
 written to the Git repository.
 
+### APK signing
+
+GitHub Actions signs every Debug APK with one persistent PKCS#12 key stored in GitHub Repository Secrets. The
+workflow reconstructs the key only in the runner's temporary directory, passes its credentials through environment
+variables, and verifies the resulting certificate SHA-256 digest before uploading the APK.
+
+The encrypted signing material and recovery files are stored only in Termux private storage at
+`/data/data/com.termux/files/home/.config/codex/android-signing/diff-viewer-android/`. They must never be copied into
+the repository or an APK artifact. Keeping this key allows future APKs to update an installed fixed-signature build
+without uninstalling it.
+
+The first fixed-signature APK cannot update an older APK signed by an ephemeral GitHub runner key. Uninstall that
+older APK once, install the fixed-signature build, and then install subsequent builds as normal updates.
+
 ### Starting the helper
 
 From this repository in Termux, choose a private token and run:
