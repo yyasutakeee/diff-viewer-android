@@ -13,29 +13,34 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.PlatformTextStyle
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.diffviewer.core.designsystem.AdditionBackgroundColor
-import com.example.diffviewer.core.designsystem.AdditionTextColor
-import com.example.diffviewer.core.designsystem.DeletionBackgroundColor
-import com.example.diffviewer.core.designsystem.DeletionTextColor
 
 @Composable
 fun DiffDisplayControls(
     diffDisplayConfiguration: DiffDisplayConfiguration,
     decreaseFontSize: () -> Unit,
     increaseFontSize: () -> Unit,
+    updateColorPalette: (DiffColorPalette) -> Unit,
 ) {
+    var isColorSettingsVisible by remember { mutableStateOf(false) }
     Row(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text("折り返し表示", modifier = Modifier.weight(1f))
+        Button(onClick = { isColorSettingsVisible = true }) { Text("配色") }
         Button(
             onClick = decreaseFontSize,
             enabled = diffDisplayConfiguration.canDecreaseFontSize,
@@ -46,11 +51,22 @@ fun DiffDisplayControls(
             enabled = diffDisplayConfiguration.canIncreaseFontSize,
         ) { Text("＋") }
     }
+    if (isColorSettingsVisible) {
+        DiffColorSettingsSheet(
+            currentColorPalette = diffDisplayConfiguration.colorPalette,
+            dismiss = { isColorSettingsVisible = false },
+            applyColorPalette = { diffColorPalette ->
+                updateColorPalette(diffColorPalette)
+                isColorSettingsVisible = false
+            },
+        )
+    }
 }
 
 fun LazyListScope.diffFileContent(
     diffFileDisplay: DiffFileDisplay,
     fontSizeSp: Int,
+    colorPalette: DiffColorPalette,
     showFileHeader: Boolean,
 ) {
     if (showFileHeader) {
@@ -96,7 +112,11 @@ fun LazyListScope.diffFileContent(
                     "line:${diffFileDisplay.id}:${diffHunkDisplay.id}:${diffLineDisplay.id}"
                 },
             ) { diffLineDisplay ->
-                DiffLineRow(diffLineDisplay = diffLineDisplay, fontSizeSp = fontSizeSp)
+                DiffLineRow(
+                    diffLineDisplay = diffLineDisplay,
+                    fontSizeSp = fontSizeSp,
+                    colorPalette = colorPalette,
+                )
             }
         }
     }
@@ -113,16 +133,20 @@ private fun DiffEmptyMessage(message: String) {
 }
 
 @Composable
-private fun DiffLineRow(diffLineDisplay: DiffLineDisplay, fontSizeSp: Int) {
+private fun DiffLineRow(
+    diffLineDisplay: DiffLineDisplay,
+    fontSizeSp: Int,
+    colorPalette: DiffColorPalette,
+) {
     val backgroundColor = when (diffLineDisplay.kind) {
-        DiffLineDisplayKind.ADDITION -> AdditionBackgroundColor
-        DiffLineDisplayKind.DELETION -> DeletionBackgroundColor
+        DiffLineDisplayKind.ADDITION -> Color(colorPalette.additionBackgroundArgb)
+        DiffLineDisplayKind.DELETION -> Color(colorPalette.deletionBackgroundArgb)
         DiffLineDisplayKind.META -> MaterialTheme.colorScheme.surfaceVariant
         DiffLineDisplayKind.CONTEXT -> Color.Transparent
     }
     val textColor = when (diffLineDisplay.kind) {
-        DiffLineDisplayKind.ADDITION -> AdditionTextColor
-        DiffLineDisplayKind.DELETION -> DeletionTextColor
+        DiffLineDisplayKind.ADDITION -> Color(colorPalette.additionTextArgb)
+        DiffLineDisplayKind.DELETION -> Color(colorPalette.deletionTextArgb)
         else -> MaterialTheme.colorScheme.onSurface
     }
     val prefix = when (diffLineDisplay.kind) {
@@ -135,7 +159,7 @@ private fun DiffLineRow(diffLineDisplay: DiffLineDisplay, fontSizeSp: Int) {
         modifier = Modifier
             .fillMaxWidth()
             .background(backgroundColor)
-            .padding(vertical = 2.dp),
+            .padding(vertical = 1.dp),
         verticalAlignment = Alignment.Top,
     ) {
         DiffLineNumber(diffLineDisplay.oldLine, fontSizeSp)
@@ -146,8 +170,11 @@ private fun DiffLineRow(diffLineDisplay: DiffLineDisplay, fontSizeSp: Int) {
             color = textColor,
             fontFamily = FontFamily.Monospace,
             fontSize = fontSizeSp.sp,
-            lineHeight = (fontSizeSp + 3).sp,
+            lineHeight = (fontSizeSp + 2).sp,
             softWrap = true,
+            style = TextStyle(
+                platformStyle = PlatformTextStyle(includeFontPadding = false),
+            ),
         )
     }
 }
@@ -160,5 +187,10 @@ private fun DiffLineNumber(lineNumber: Int?, fontSizeSp: Int) {
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         fontFamily = FontFamily.Monospace,
         fontSize = fontSizeSp.sp,
+        maxLines = 1,
+        softWrap = false,
+        style = TextStyle(
+            platformStyle = PlatformTextStyle(includeFontPadding = false),
+        ),
     )
 }

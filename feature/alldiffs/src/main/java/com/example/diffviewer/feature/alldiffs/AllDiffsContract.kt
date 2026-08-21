@@ -1,6 +1,7 @@
 package com.example.diffviewer.feature.alldiffs
 
 import com.example.diffviewer.core.diffui.DiffDisplayConfiguration
+import com.example.diffviewer.core.diffui.DiffColorPalette
 import com.example.diffviewer.core.diffui.DiffFileDisplay
 import kotlinx.coroutines.flow.StateFlow
 
@@ -13,6 +14,7 @@ sealed interface AllDiffsEvent {
     data object NavigateBack : AllDiffsEvent
     data object DecreaseFontSize : AllDiffsEvent
     data object IncreaseFontSize : AllDiffsEvent
+    data class UpdateColorPalette(val diffColorPalette: DiffColorPalette) : AllDiffsEvent
 }
 
 data class AllDiffsUiState(

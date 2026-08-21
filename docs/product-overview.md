@@ -125,10 +125,12 @@ The first useful version will target this repository and provide:
 6. A continuously scrollable view containing every changed file in the selected working-tree or latest-commit source.
 7. Visual line wrapping for source text that exceeds the available screen width without modifying its content.
 8. A shared 8–24sp font-size control for single-file and all-files diff views.
-9. Manual refresh after Termux or Codex changes files.
-10. Clear empty, loading, helper-unavailable, and Git-error states.
-11. A switch between uncommitted changes and the latest commit.
-12. Automatic latest-commit selection when the working tree has no changes.
+9. Shared, persistent addition/deletion background and text colors with standard, deep, blue, dark, and
+   high-contrast presets plus validated custom ARGB hexadecimal values.
+10. Manual refresh after Termux or Codex changes files.
+11. Clear empty, loading, helper-unavailable, and Git-error states.
+12. A switch between uncommitted changes and the latest commit.
+13. Automatic latest-commit selection when the working tree has no changes.
 
 Untracked files must be represented explicitly. Plain `git diff` does not include their contents, so the Termux
 helper must handle them separately rather than making them silently disappear.
@@ -159,6 +161,8 @@ The Android application must:
 - Preserve source text exactly where practical, including indentation and empty lines.
 - Wrap long source lines visually within the screen while preserving their underlying text.
 - Apply the current session's diff font size consistently to single-file and all-files views.
+- Apply one persisted diff color palette to both diff views. Preserve `+` and `-` prefixes so color is never the
+  only carrier of addition and deletion meaning.
 - Never imply that a file is unchanged when its data could not be loaded.
 
 ## Out of scope for the initial version
