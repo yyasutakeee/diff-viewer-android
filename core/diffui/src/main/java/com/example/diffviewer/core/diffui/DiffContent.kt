@@ -181,7 +181,7 @@ private fun DiffLineRow(
         Text(
             text = highlightedText,
             modifier = Modifier.weight(1f),
-            color = textColor,
+            color = Color.Unspecified,
             fontFamily = FontFamily.Monospace,
             fontSize = fontSizeSp.sp,
             lineHeight = (fontSizeSp + 2).sp,
