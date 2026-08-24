@@ -85,6 +85,11 @@ fun LazyListScope.diffFileContent(
         }
     }
     when {
+        diffFileDisplay.contentUnavailableMessage != null -> {
+            item(key = "unavailable:${diffFileDisplay.id}") {
+                DiffEmptyMessage(diffFileDisplay.contentUnavailableMessage)
+            }
+        }
         diffFileDisplay.isBinary -> {
             item(key = "binary:${diffFileDisplay.id}") {
                 DiffEmptyMessage("バイナリファイルの内容は表示できません")

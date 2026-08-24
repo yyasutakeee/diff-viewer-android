@@ -22,6 +22,7 @@ data class AppState(
 
 class AppStore(
     private val diffRepository: DiffRepository,
+    private val githubDiffRepository: DiffRepository,
     private val connectionSettingsRepository: ConnectionSettingsRepository,
     private val coroutineScope: CoroutineScope,
 ) {
@@ -33,25 +34,39 @@ class AppStore(
 
     fun refreshRepositoryDiff(connectionSettings: ConnectionSettings) {
         if (mutableState.value.isLoadingRepositoryDiff) return
-        if (connectionSettings.token.isBlank()) {
+        val termuxConnectionSettings = mutableState.value.connectionSettings.copy(
+            endpoint = connectionSettings.endpoint,
+            token = connectionSettings.token,
+            repositorySource = RepositorySource.TERMUX,
+        )
+        if (termuxConnectionSettings.token.isBlank()) {
             mutableState.value = mutableState.value.copy(
-                connectionSettings = connectionSettings,
+                connectionSettings = termuxConnectionSettings,
+                isLoadingCommitHistory = false,
+                isLoadingSelectedCommit = false,
                 repositoryDiffErrorMessage = "アクセストークンを入力してください",
             )
             return
         }
 
-        connectionSettingsRepository.saveConnectionSettings(connectionSettings)
+        connectionSettingsRepository.saveConnectionSettings(termuxConnectionSettings)
         mutableState.value = mutableState.value.copy(
-            connectionSettings = connectionSettings,
+            connectionSettings = termuxConnectionSettings,
+            repositoryDiff = null,
+            commitSummaryItems = emptyList(),
+            nextCommitHistoryOffset = null,
+            selectedCommitId = null,
+            selectedCommitDiff = null,
             isLoadingRepositoryDiff = true,
+            isLoadingCommitHistory = false,
+            isLoadingSelectedCommit = false,
             repositoryDiffErrorMessage = null,
         )
         coroutineScope.launch {
             runCatching {
                 diffRepository.fetchRepositoryDiff(
-                    endpoint = connectionSettings.endpoint,
-                    token = connectionSettings.token,
+                    endpoint = termuxConnectionSettings.endpoint,
+                    token = termuxConnectionSettings.token,
                 )
             }.onSuccess { repositoryDiff ->
                 mutableState.value = mutableState.value.copy(
@@ -61,6 +76,8 @@ class AppStore(
                     selectedCommitId = null,
                     selectedCommitDiff = null,
                     isLoadingRepositoryDiff = false,
+                    isLoadingCommitHistory = false,
+                    isLoadingSelectedCommit = false,
                     commitHistoryErrorMessage = null,
                 )
             }.onFailure { error ->
@@ -69,6 +86,39 @@ class AppStore(
                     repositoryDiffErrorMessage = error.message ?: "差分を取得できませんでした",
                 )
             }
+        }
+    }
+
+    fun refreshGitHubRepositoryDiff(githubRepositoryUrl: String) {
+        if (mutableState.value.isLoadingRepositoryDiff) return
+        if (githubRepositoryUrl.isBlank()) {
+            mutableState.value = mutableState.value.copy(
+                repositoryDiffErrorMessage = "GitHubリポジトリURLを入力してください",
+            )
+            return
+        }
+        val githubConnectionSettings = mutableState.value.connectionSettings.copy(
+            githubRepositoryUrl = githubRepositoryUrl,
+            repositorySource = RepositorySource.GITHUB,
+        )
+        connectionSettingsRepository.saveConnectionSettings(githubConnectionSettings)
+        mutableState.value = mutableState.value.copy(
+            connectionSettings = githubConnectionSettings,
+            repositoryDiff = null,
+            commitSummaryItems = emptyList(),
+            nextCommitHistoryOffset = null,
+            selectedCommitId = null,
+            selectedCommitDiff = null,
+            isLoadingRepositoryDiff = true,
+            isLoadingCommitHistory = false,
+            isLoadingSelectedCommit = false,
+            repositoryDiffErrorMessage = null,
+        )
+        coroutineScope.launch {
+            runCatching {
+                githubDiffRepository.fetchRepositoryDiff(githubRepositoryUrl, "")
+            }.onSuccess(::applyRepositoryDiff)
+                .onFailure(::applyRepositoryDiffFailure)
         }
     }
 
@@ -82,23 +132,34 @@ class AppStore(
         )
         coroutineScope.launch {
             runCatching {
-                diffRepository.fetchCommitHistoryPage(
-                    endpoint = currentState.connectionSettings.endpoint,
-                    token = currentState.connectionSettings.token,
-                    offset = nextOffset,
-                )
+                when (currentState.connectionSettings.repositorySource) {
+                    RepositorySource.TERMUX -> diffRepository.fetchCommitHistoryPage(
+                        endpoint = currentState.connectionSettings.endpoint,
+                        token = currentState.connectionSettings.token,
+                        offset = nextOffset,
+                    )
+                    RepositorySource.GITHUB -> githubDiffRepository.fetchCommitHistoryPage(
+                        endpoint = currentState.connectionSettings.githubRepositoryUrl,
+                        token = "",
+                        offset = nextOffset,
+                    )
+                }
             }.onSuccess { commitHistoryPage ->
-                mutableState.value = mutableState.value.copy(
-                    commitSummaryItems = mutableState.value.commitSummaryItems +
-                        commitHistoryPage.commitSummaryItems,
-                    nextCommitHistoryOffset = commitHistoryPage.nextOffset,
-                    isLoadingCommitHistory = false,
-                )
+                if (mutableState.value.connectionSettings == currentState.connectionSettings) {
+                    mutableState.value = mutableState.value.copy(
+                        commitSummaryItems = mutableState.value.commitSummaryItems +
+                            commitHistoryPage.commitSummaryItems,
+                        nextCommitHistoryOffset = commitHistoryPage.nextOffset,
+                        isLoadingCommitHistory = false,
+                    )
+                }
             }.onFailure { error ->
-                mutableState.value = mutableState.value.copy(
-                    isLoadingCommitHistory = false,
-                    commitHistoryErrorMessage = error.message ?: "コミット履歴を取得できませんでした",
-                )
+                if (mutableState.value.connectionSettings == currentState.connectionSettings) {
+                    mutableState.value = mutableState.value.copy(
+                        isLoadingCommitHistory = false,
+                        commitHistoryErrorMessage = error.message ?: "コミット履歴を取得できませんでした",
+                    )
+                }
             }
         }
     }
@@ -114,20 +175,33 @@ class AppStore(
         )
         coroutineScope.launch {
             runCatching {
-                diffRepository.fetchCommitDiff(
-                    endpoint = currentState.connectionSettings.endpoint,
-                    token = currentState.connectionSettings.token,
-                    commitId = commitId,
-                )
+                when (currentState.connectionSettings.repositorySource) {
+                    RepositorySource.TERMUX -> diffRepository.fetchCommitDiff(
+                        endpoint = currentState.connectionSettings.endpoint,
+                        token = currentState.connectionSettings.token,
+                        commitId = commitId,
+                    )
+                    RepositorySource.GITHUB -> githubDiffRepository.fetchCommitDiff(
+                        endpoint = currentState.connectionSettings.githubRepositoryUrl,
+                        token = "",
+                        commitId = commitId,
+                    )
+                }
             }.onSuccess { commitDiff ->
-                if (mutableState.value.selectedCommitId == commitId) {
+                if (
+                    mutableState.value.connectionSettings == currentState.connectionSettings &&
+                    mutableState.value.selectedCommitId == commitId
+                ) {
                     mutableState.value = mutableState.value.copy(
                         selectedCommitDiff = commitDiff,
                         isLoadingSelectedCommit = false,
                     )
                 }
             }.onFailure { error ->
-                if (mutableState.value.selectedCommitId == commitId) {
+                if (
+                    mutableState.value.connectionSettings == currentState.connectionSettings &&
+                    mutableState.value.selectedCommitId == commitId
+                ) {
                     mutableState.value = mutableState.value.copy(
                         isLoadingSelectedCommit = false,
                         commitHistoryErrorMessage = error.message ?: "コミット差分を取得できませんでした",
@@ -135,5 +209,26 @@ class AppStore(
                 }
             }
         }
+    }
+
+    private fun applyRepositoryDiff(repositoryDiff: RepositoryDiff) {
+        mutableState.value = mutableState.value.copy(
+            repositoryDiff = repositoryDiff,
+            commitSummaryItems = repositoryDiff.commitHistoryPage.commitSummaryItems,
+            nextCommitHistoryOffset = repositoryDiff.commitHistoryPage.nextOffset,
+            selectedCommitId = null,
+            selectedCommitDiff = null,
+            isLoadingRepositoryDiff = false,
+            isLoadingCommitHistory = false,
+            isLoadingSelectedCommit = false,
+            commitHistoryErrorMessage = null,
+        )
+    }
+
+    private fun applyRepositoryDiffFailure(error: Throwable) {
+        mutableState.value = mutableState.value.copy(
+            isLoadingRepositoryDiff = false,
+            repositoryDiffErrorMessage = error.message ?: "差分を取得できませんでした",
+        )
     }
 }

@@ -3,7 +3,7 @@
 ## Purpose
 
 Diff Viewer is an Android application for reviewing Git working-tree changes made in Termux, including changes
-made by Codex.
+made by Codex, and commit changes obtained directly from public GitHub repositories.
 
 The Termux terminal can display `git diff`, but a large diff eventually exceeds the useful terminal scrollback.
 This application provides a persistent, touch-friendly view in which the complete diff remains available for
@@ -35,12 +35,34 @@ flowchart LR
     A[Git working tree] --> B[Termux Git command]
     B --> C[Termux localhost helper]
     C --> D[Android Diff Viewer]
+    G[GitHub REST API] --> D
     D --> E[File list and colored line diff]
 ```
 
-This design is preferred over implementing Git inside the Android application because it preserves Git CLI
-behavior, avoids parsing `.git` internals, and makes staged, unstaged, renamed, and binary changes easier to
-represent consistently.
+The local-helper path is preferred over implementing Git inside the Android application because it preserves Git
+CLI behavior, avoids parsing `.git` internals, and makes staged, unstaged, renamed, and binary changes easier to
+represent consistently. The direct GitHub path supplements it for committed remote history; it does not replace
+the helper for working-tree data.
+
+### Repository data sources
+
+The repository screen offers two read-only data sources:
+
+- **Termux:** connects to the localhost helper and displays the working tree, latest commit, and first-parent
+  commit history.
+- **GitHub:** accepts a public `https://github.com/owner/repository` URL and reads the default branch's commits
+  directly through the GitHub REST API. It requires neither the Termux helper nor a token in the initial version.
+
+The selected source and both sources' connection values are stored in private application preferences. Switching
+sources does not discard the other source's saved values. GitHub mode cannot display uncommitted working-tree
+changes because those changes do not exist on GitHub; its available views are the latest commit and commit history.
+
+GitHub commit summaries and changed files are requested in pages and combined without silently truncating a
+multi-page commit. When GitHub omits a file's `patch` field, including unsupported, binary, or oversized content,
+the application keeps the file visible and explicitly reports that its line diff was unavailable. GitHub mode is
+unauthenticated and therefore remains subject to GitHub's public API limit of 60 requests per hour per originating
+IP address. A commit that reaches GitHub's 3,000-changed-file response limit is rejected with an explicit error
+rather than shown as a complete diff. Private-repository authentication is intentionally deferred.
 
 ### Local interface
 
@@ -138,6 +160,8 @@ The first useful version will target this repository and provide:
 14. Automatic latest-commit selection when the working tree has no changes.
 15. A paged commit-history selector that loads 20 summaries at a time and displays any selected commit against its
     first parent, including the repository's initial commit against an empty tree.
+16. A saved Termux/GitHub source switch that can show the default branch's latest commit and paged commit history
+    for a public GitHub repository without starting the Termux helper.
 
 Untracked files must be represented explicitly. Plain `git diff` does not include their contents, so the Termux
 helper must handle them separately rather than making them silently disappear.
@@ -175,6 +199,7 @@ The Android application must:
 - Select light or dark Kotlin token colors from the effective row background so custom diff palettes remain
   readable. Cache tokenization per visible line rather than reparsing on every recomposition.
 - Never imply that a file is unchanged when its data could not be loaded.
+- Keep a GitHub file visible and show an explicit unavailable-content message whenever the API omits its patch.
 
 Kotlin highlighting is intentionally lexical and line-based. A diff hunk may begin inside a multiline comment or
 triple-quoted string whose opening delimiter is outside the response, so those cross-line constructs cannot always
@@ -188,6 +213,7 @@ be classified perfectly. Highlighting must never alter or hide the source text r
 - Applying or reverting patches.
 - Merge-conflict resolution.
 - GitHub pull-request review.
+- Private GitHub repository authentication.
 - Remote access to the Termux helper.
 - Release signing or distribution through an app store.
 

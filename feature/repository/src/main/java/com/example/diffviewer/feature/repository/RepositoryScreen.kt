@@ -43,16 +43,28 @@ fun RepositoryScreen(viewModel: RepositoryViewModel) {
     val repositoryUiState by viewModel.state.collectAsStateWithLifecycle()
     var endpoint by rememberSaveable { mutableStateOf(repositoryUiState.endpoint) }
     var token by rememberSaveable { mutableStateOf(repositoryUiState.token) }
+    var githubRepositoryUrl by rememberSaveable { mutableStateOf(repositoryUiState.githubRepositoryUrl) }
+    var selectedConnectionSource by rememberSaveable {
+        mutableStateOf(repositoryUiState.repositoryConnectionSource)
+    }
     var selectedSource by rememberSaveable { mutableStateOf(DiffSource.WORKING_TREE) }
     val selectedRepositoryDiffSource = selectedSource.toRepositoryDiffSource(
         repositoryUiState.selectedCommit?.id
     )
 
-    LaunchedEffect(repositoryUiState.endpoint, repositoryUiState.token) {
+    LaunchedEffect(
+        repositoryUiState.endpoint,
+        repositoryUiState.token,
+        repositoryUiState.githubRepositoryUrl,
+    ) {
         if (endpoint.isEmpty()) endpoint = repositoryUiState.endpoint
         if (token.isEmpty()) token = repositoryUiState.token
+        if (githubRepositoryUrl.isEmpty()) githubRepositoryUrl = repositoryUiState.githubRepositoryUrl
     }
-    LaunchedEffect(repositoryUiState) {
+    LaunchedEffect(
+        repositoryUiState.workingTreeSectionItems,
+        repositoryUiState.latestCommit,
+    ) {
         val workingTreeIsEmpty = repositoryUiState.workingTreeSectionItems.all { it.fileItems.isEmpty() }
         if (
             selectedSource == DiffSource.WORKING_TREE &&
@@ -60,6 +72,12 @@ fun RepositoryScreen(viewModel: RepositoryViewModel) {
             repositoryUiState.latestCommit?.fileItems?.isNotEmpty() == true
         ) {
             selectedSource = DiffSource.LATEST_COMMIT
+        }
+    }
+    LaunchedEffect(repositoryUiState.repositoryConnectionSource) {
+        selectedConnectionSource = repositoryUiState.repositoryConnectionSource
+        if (repositoryUiState.repositoryConnectionSource == RepositoryConnectionSource.GITHUB) {
+            if (selectedSource == DiffSource.WORKING_TREE) selectedSource = DiffSource.LATEST_COMMIT
         }
     }
 
@@ -72,24 +90,44 @@ fun RepositoryScreen(viewModel: RepositoryViewModel) {
             Text("Diff Viewer", style = MaterialTheme.typography.headlineMedium)
             Spacer(modifier = Modifier.height(4.dp))
             Text(
-                "TermuxのGit変更を読み取り専用で表示します",
+                "TermuxまたはGitHubのGit変更を読み取り専用で表示します",
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
         item {
-            ConnectionCard(
-                endpoint = endpoint,
-                token = token,
-                isLoading = repositoryUiState.isLoading,
-                onEndpointChange = { endpoint = it },
-                onTokenChange = { token = it },
-                onRefresh = { viewModel.send(RepositoryEvent.Refresh(endpoint, token)) },
-            )
+            ConnectionSourceSelector(selectedConnectionSource) { selectedConnectionSource = it }
+        }
+        item {
+            when (selectedConnectionSource) {
+                RepositoryConnectionSource.TERMUX -> ConnectionCard(
+                    endpoint = endpoint,
+                    token = token,
+                    isLoading = repositoryUiState.isLoading,
+                    onEndpointChange = { endpoint = it },
+                    onTokenChange = { token = it },
+                    onRefresh = { viewModel.send(RepositoryEvent.Refresh(endpoint, token)) },
+                )
+                RepositoryConnectionSource.GITHUB -> GitHubConnectionCard(
+                    repositoryUrl = githubRepositoryUrl,
+                    isLoading = repositoryUiState.isLoading,
+                    onRepositoryUrlChange = { githubRepositoryUrl = it },
+                    onRefresh = {
+                        viewModel.send(RepositoryEvent.RefreshGitHub(githubRepositoryUrl))
+                    },
+                )
+            }
         }
         repositoryUiState.errorMessage?.let { errorMessage -> item { ErrorCard(errorMessage) } }
         if (repositoryUiState.repositoryName != null) {
             item { RepositorySummary(repositoryUiState) }
-            item { DiffSourceSelector(selectedSource) { selectedSource = it } }
+            item {
+                DiffSourceSelector(
+                    selectedSource = selectedSource,
+                    showWorkingTree = repositoryUiState.repositoryConnectionSource ==
+                        RepositoryConnectionSource.TERMUX,
+                    onSelected = { selectedSource = it },
+                )
+            }
             item {
                 Button(
                     onClick = {
@@ -298,6 +336,67 @@ private fun ConnectionCard(
 }
 
 @Composable
+private fun GitHubConnectionCard(
+    repositoryUrl: String,
+    isLoading: Boolean,
+    onRepositoryUrlChange: (String) -> Unit,
+    onRefresh: () -> Unit,
+) {
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            OutlinedTextField(
+                value = repositoryUrl,
+                onValueChange = onRepositoryUrlChange,
+                modifier = Modifier.fillMaxWidth(),
+                label = { Text("公開GitHubリポジトリURL") },
+                placeholder = { Text("https://github.com/owner/repository") },
+                singleLine = true,
+            )
+            Text(
+                "公開リポジトリのコミット履歴を表示します。Termuxサーバーは不要です。",
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.bodySmall,
+            )
+            Button(onClick = onRefresh, enabled = !isLoading, modifier = Modifier.fillMaxWidth()) {
+                if (isLoading) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.width(20.dp).height(20.dp),
+                        strokeWidth = 2.dp,
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("読み込み中")
+                } else {
+                    Text("GitHubから読み込む")
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ConnectionSourceSelector(
+    selectedSource: RepositoryConnectionSource,
+    onSelected: (RepositoryConnectionSource) -> Unit,
+) {
+    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        RepositoryConnectionSource.entries.forEach { connectionSource ->
+            FilterChip(
+                selected = selectedSource == connectionSource,
+                onClick = { onSelected(connectionSource) },
+                label = {
+                    Text(
+                        when (connectionSource) {
+                            RepositoryConnectionSource.TERMUX -> "Termux"
+                            RepositoryConnectionSource.GITHUB -> "GitHub"
+                        }
+                    )
+                },
+            )
+        }
+    }
+}
+
+@Composable
 private fun RepositorySummary(repositoryUiState: RepositoryUiState) {
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(16.dp)) {
@@ -315,9 +414,13 @@ private fun RepositorySummary(repositoryUiState: RepositoryUiState) {
 }
 
 @Composable
-private fun DiffSourceSelector(selectedSource: DiffSource, onSelected: (DiffSource) -> Unit) {
+private fun DiffSourceSelector(
+    selectedSource: DiffSource,
+    showWorkingTree: Boolean,
+    onSelected: (DiffSource) -> Unit,
+) {
     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        DiffSource.entries.forEach { diffSource ->
+        availableDiffSources(showWorkingTree).forEach { diffSource ->
             FilterChip(
                 selected = selectedSource == diffSource,
                 onClick = { onSelected(diffSource) },
@@ -326,6 +429,9 @@ private fun DiffSourceSelector(selectedSource: DiffSource, onSelected: (DiffSour
         }
     }
 }
+
+private fun availableDiffSources(showWorkingTree: Boolean): List<DiffSource> =
+    if (showWorkingTree) DiffSource.entries else listOf(DiffSource.LATEST_COMMIT, DiffSource.COMMIT_HISTORY)
 
 @Composable
 private fun FileCard(fileDiffUiItem: FileDiffUiItem, onClick: () -> Unit) {
@@ -337,6 +443,8 @@ private fun FileCard(fileDiffUiItem: FileDiffUiItem, onClick: () -> Unit) {
                 Text(fileDiffUiItem.status, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 if (fileDiffUiItem.isBinary) {
                     Text("バイナリ")
+                } else if (fileDiffUiItem.contentUnavailableMessage != null) {
+                    Text("本文なし")
                 } else {
                     Text("+${fileDiffUiItem.additionCount}", color = AdditionTextColor)
                     Text("-${fileDiffUiItem.deletionCount}", color = DeletionTextColor)

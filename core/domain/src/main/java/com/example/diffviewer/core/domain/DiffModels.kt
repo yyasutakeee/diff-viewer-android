@@ -47,6 +47,7 @@ data class FileDiff(
     val newPath: String?,
     val status: FileDiffStatus,
     val isBinary: Boolean,
+    val contentUnavailableMessage: String? = null,
     val hunkItems: List<DiffHunk>,
 ) {
     val path: String?

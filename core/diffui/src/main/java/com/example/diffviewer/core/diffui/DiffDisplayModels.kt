@@ -4,6 +4,7 @@ data class DiffFileDisplay(
     val id: String,
     val path: String,
     val isBinary: Boolean,
+    val contentUnavailableMessage: String?,
     val hunkDisplays: List<DiffHunkDisplay>,
 )
 
