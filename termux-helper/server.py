@@ -15,13 +15,15 @@ import re
 import shlex
 import subprocess
 from typing import Any
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, urlparse
 
 
 MAX_UNTRACKED_FILE_BYTES = 1_000_000
+COMMIT_HISTORY_PAGE_SIZE = 20
 HUNK_HEADER_PATTERN = re.compile(
     r"^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@(?: (.*))?$"
 )
+FULL_COMMIT_ID_PATTERN = re.compile(r"^[0-9a-fA-F]{40}$")
 
 
 class GitCommandError(RuntimeError):
@@ -48,12 +50,7 @@ class GitCommandRunner:
 
 
 def build_repository_diff(repository: Path) -> dict[str, Any]:
-    resolved_repository = repository.expanduser().resolve(strict=True)
-    git_command_runner = GitCommandRunner(resolved_repository)
-    repository_root_output = git_command_runner.run("rev-parse", "--show-toplevel")
-    repository_root = Path(str(repository_root_output).strip()).resolve(strict=True)
-    if repository_root != resolved_repository:
-        raise GitCommandError("Configured path must be the Git repository root")
+    git_command_runner, repository_root = create_repository_git_command_runner(repository)
 
     branch_output = str(git_command_runner.run("branch", "--show-current")).strip()
     if not branch_output:
@@ -89,33 +86,14 @@ def build_repository_diff(repository: Path) -> dict[str, Any]:
         "-z",
         text=False,
     )
-    latest_commit_output = str(
-        git_command_runner.run("log", "-1", "--format=%H%x00%s")
-    ).rstrip("\n")
-    latest_commit_id, latest_commit_subject = latest_commit_output.split("\0", maxsplit=1)
-    latest_commit_patch = str(
-        git_command_runner.run(
-            "-c",
-            "core.quotePath=false",
-            "show",
-            "--format=",
-            "--diff-merges=first-parent",
-            "--find-renames",
-            "--no-ext-diff",
-            "--no-color",
-            "--unified=3",
-            "HEAD",
-        )
-    )
+    latest_commit = build_commit_diff(git_command_runner, "HEAD")
+    commit_history_page = build_commit_history_page(git_command_runner, offset=0)
 
     return {
         "repository": str(repository_root),
         "branch": branch_output,
-        "latestCommit": {
-            "id": latest_commit_id,
-            "subject": latest_commit_subject,
-            "files": parse_unified_diff(latest_commit_patch),
-        },
+        "latestCommit": latest_commit,
+        "commitHistory": commit_history_page,
         "sections": [
             {"kind": "unstaged", "files": parse_unified_diff(unstaged_patch)},
             {"kind": "staged", "files": parse_unified_diff(staged_patch)},
@@ -128,6 +106,89 @@ def build_repository_diff(repository: Path) -> dict[str, Any]:
             },
         ],
     }
+
+
+def create_repository_git_command_runner(
+    repository: Path,
+) -> tuple[GitCommandRunner, Path]:
+    resolved_repository = repository.expanduser().resolve(strict=True)
+    git_command_runner = GitCommandRunner(resolved_repository)
+    repository_root_output = git_command_runner.run("rev-parse", "--show-toplevel")
+    repository_root = Path(str(repository_root_output).strip()).resolve(strict=True)
+    if repository_root != resolved_repository:
+        raise GitCommandError("Configured path must be the Git repository root")
+    return git_command_runner, repository_root
+
+
+def build_commit_history_page(
+    git_command_runner: GitCommandRunner,
+    offset: int,
+) -> dict[str, Any]:
+    if offset < 0:
+        raise GitCommandError("Commit history offset must not be negative")
+    history_output = str(
+        git_command_runner.run(
+            "log",
+            "--first-parent",
+            f"--skip={offset}",
+            f"--max-count={COMMIT_HISTORY_PAGE_SIZE + 1}",
+            "--format=%H%x00%s%x00%an%x00%aI",
+            "HEAD",
+        )
+    )
+    commit_summary_items = [
+        parse_commit_summary_line(history_line)
+        for history_line in history_output.splitlines()
+        if history_line
+    ]
+    has_more_commits = len(commit_summary_items) > COMMIT_HISTORY_PAGE_SIZE
+    visible_commit_summary_items = commit_summary_items[:COMMIT_HISTORY_PAGE_SIZE]
+    return {
+        "commits": visible_commit_summary_items,
+        "nextOffset": offset + COMMIT_HISTORY_PAGE_SIZE if has_more_commits else None,
+    }
+
+
+def parse_commit_summary_line(history_line: str) -> dict[str, str]:
+    commit_id, subject, author_name, authored_at = history_line.split("\0", maxsplit=3)
+    return {
+        "id": commit_id,
+        "subject": subject,
+        "authorName": author_name,
+        "authoredAt": authored_at,
+    }
+
+
+def build_commit_diff(
+    git_command_runner: GitCommandRunner,
+    commit_reference: str,
+) -> dict[str, Any]:
+    if commit_reference != "HEAD" and not FULL_COMMIT_ID_PATTERN.fullmatch(commit_reference):
+        raise GitCommandError("Invalid commit ID")
+    commit_metadata_output = str(
+        git_command_runner.run(
+            "show",
+            "-s",
+            "--format=%H%x00%s%x00%an%x00%aI",
+            commit_reference,
+        )
+    ).rstrip("\n")
+    commit_summary = parse_commit_summary_line(commit_metadata_output)
+    commit_patch = str(
+        git_command_runner.run(
+            "-c",
+            "core.quotePath=false",
+            "show",
+            "--format=",
+            "--diff-merges=first-parent",
+            "--find-renames",
+            "--no-ext-diff",
+            "--no-color",
+            "--unified=3",
+            commit_reference,
+        )
+    )
+    return {**commit_summary, "files": parse_unified_diff(commit_patch)}
 
 
 def parse_unified_diff(patch: str) -> list[dict[str, Any]]:
@@ -311,23 +372,56 @@ def create_request_handler(
 ) -> type[BaseHTTPRequestHandler]:
     class DiffRequestHandler(BaseHTTPRequestHandler):
         def do_GET(self) -> None:
-            if urlparse(self.path).path != "/api/v1/diff":
-                self.send_json(HTTPStatus.NOT_FOUND, {"error": "Not found"})
-                return
+            parsed_url = urlparse(self.path)
             authorization = self.headers.get("Authorization", "")
             expected_authorization = f"Bearer {access_token}"
             if not hmac.compare_digest(authorization, expected_authorization):
                 self.send_json(HTTPStatus.UNAUTHORIZED, {"error": "Unauthorized"})
                 return
             try:
-                response = build_repository_diff(repository)
+                response = self.build_response(parsed_url.path, parse_qs(parsed_url.query))
+            except ValueError as error:
+                self.send_json(
+                    HTTPStatus.BAD_REQUEST,
+                    {"error": str(error)},
+                )
+                return
             except (GitCommandError, OSError) as error:
                 self.send_json(
                     HTTPStatus.INTERNAL_SERVER_ERROR,
                     {"error": str(error)},
                 )
                 return
+            if response is None:
+                self.send_json(HTTPStatus.NOT_FOUND, {"error": "Not found"})
+                return
             self.send_json(HTTPStatus.OK, response)
+
+        def build_response(
+            self,
+            request_path: str,
+            query_parameters: dict[str, list[str]],
+        ) -> dict[str, Any] | None:
+            if request_path == "/api/v1/diff":
+                return build_repository_diff(repository)
+            if request_path == "/api/v1/commits":
+                offset_values = query_parameters.get("offset", ["0"])
+                if len(offset_values) != 1:
+                    raise ValueError("Commit history offset must be specified once")
+                offset = int(offset_values[0])
+                git_command_runner, _ = create_repository_git_command_runner(repository)
+                return build_commit_history_page(git_command_runner, offset)
+            commit_path_match = re.fullmatch(
+                r"/api/v1/commits/([0-9a-fA-F]{40})/diff",
+                request_path,
+            )
+            if commit_path_match:
+                git_command_runner, _ = create_repository_git_command_runner(repository)
+                return build_commit_diff(
+                    git_command_runner,
+                    commit_path_match.group(1),
+                )
+            return None
 
         def send_json(self, status: HTTPStatus, payload: dict[str, Any]) -> None:
             response_body = json.dumps(payload, ensure_ascii=False).encode("utf-8")

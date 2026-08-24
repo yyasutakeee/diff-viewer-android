@@ -16,6 +16,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
@@ -43,6 +44,9 @@ fun RepositoryScreen(viewModel: RepositoryViewModel) {
     var endpoint by rememberSaveable { mutableStateOf(repositoryUiState.endpoint) }
     var token by rememberSaveable { mutableStateOf(repositoryUiState.token) }
     var selectedSource by rememberSaveable { mutableStateOf(DiffSource.WORKING_TREE) }
+    val selectedRepositoryDiffSource = selectedSource.toRepositoryDiffSource(
+        repositoryUiState.selectedCommit?.id
+    )
 
     LaunchedEffect(repositoryUiState.endpoint, repositoryUiState.token) {
         if (endpoint.isEmpty()) endpoint = repositoryUiState.endpoint
@@ -50,7 +54,11 @@ fun RepositoryScreen(viewModel: RepositoryViewModel) {
     }
     LaunchedEffect(repositoryUiState) {
         val workingTreeIsEmpty = repositoryUiState.workingTreeSectionItems.all { it.fileItems.isEmpty() }
-        if (workingTreeIsEmpty && repositoryUiState.latestCommit?.fileItems?.isNotEmpty() == true) {
+        if (
+            selectedSource == DiffSource.WORKING_TREE &&
+            workingTreeIsEmpty &&
+            repositoryUiState.latestCommit?.fileItems?.isNotEmpty() == true
+        ) {
             selectedSource = DiffSource.LATEST_COMMIT
         }
     }
@@ -85,9 +93,9 @@ fun RepositoryScreen(viewModel: RepositoryViewModel) {
             item {
                 Button(
                     onClick = {
-                        viewModel.send(
-                            RepositoryEvent.OpenAllDiffs(selectedSource.toRepositoryDiffSource())
-                        )
+                        selectedRepositoryDiffSource?.let { repositoryDiffSource ->
+                            viewModel.send(RepositoryEvent.OpenAllDiffs(repositoryDiffSource))
+                        }
                     },
                     enabled = repositoryUiState.hasFiles(selectedSource),
                     modifier = Modifier.fillMaxWidth(),
@@ -98,7 +106,109 @@ fun RepositoryScreen(viewModel: RepositoryViewModel) {
             when (selectedSource) {
                 DiffSource.WORKING_TREE -> workingTreeItems(repositoryUiState, viewModel)
                 DiffSource.LATEST_COMMIT -> latestCommitItems(repositoryUiState, viewModel)
+                DiffSource.COMMIT_HISTORY -> commitHistoryItems(repositoryUiState, viewModel)
             }
+        }
+    }
+}
+
+private fun androidx.compose.foundation.lazy.LazyListScope.commitHistoryItems(
+    repositoryUiState: RepositoryUiState,
+    viewModel: RepositoryViewModel,
+) {
+    item { Text("コミット履歴", style = MaterialTheme.typography.titleMedium) }
+    repositoryUiState.commitHistoryItems.forEach { commitHistoryUiItem ->
+        item(key = "commit:${commitHistoryUiItem.id}") {
+            CommitHistoryCard(commitHistoryUiItem) {
+                viewModel.send(RepositoryEvent.SelectCommit(commitHistoryUiItem.id))
+            }
+        }
+        if (commitHistoryUiItem.isSelected) {
+            if (repositoryUiState.isLoadingSelectedCommit) {
+                item(key = "commit-loading:${commitHistoryUiItem.id}") {
+                    Box(
+                        modifier = Modifier.fillMaxWidth().padding(24.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        CircularProgressIndicator()
+                    }
+                }
+            } else {
+                val selectedCommit = repositoryUiState.selectedCommit
+                if (selectedCommit?.id == commitHistoryUiItem.id) {
+                    items(
+                        items = selectedCommit.fileItems,
+                        key = { fileDiffUiItem -> fileDiffUiItem.id },
+                    ) { fileDiffUiItem ->
+                        FileCard(fileDiffUiItem) {
+                            viewModel.send(RepositoryEvent.OpenFile(fileDiffUiItem.id))
+                        }
+                    }
+                    if (selectedCommit.fileItems.isEmpty()) {
+                        item(key = "commit-empty:${commitHistoryUiItem.id}") {
+                            EmptyMessage("このコミットに表示できる変更はありません")
+                        }
+                    }
+                }
+            }
+        }
+    }
+    repositoryUiState.commitHistoryErrorMessage?.let { errorMessage ->
+        item { ErrorCard(errorMessage) }
+    }
+    if (repositoryUiState.commitHistoryItems.isEmpty()) {
+        item { EmptyMessage("コミット履歴はありません") }
+    }
+    if (repositoryUiState.hasMoreCommits) {
+        item {
+            Button(
+                onClick = { viewModel.send(RepositoryEvent.LoadMoreCommits) },
+                enabled = !repositoryUiState.isLoadingCommitHistory,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                if (repositoryUiState.isLoadingCommitHistory) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.width(20.dp).height(20.dp),
+                        strokeWidth = 2.dp,
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("読み込み中")
+                } else {
+                    Text("さらに読み込む")
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun CommitHistoryCard(
+    commitHistoryUiItem: CommitHistoryUiItem,
+    onClick: () -> Unit,
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
+        colors = CardDefaults.cardColors(
+            containerColor = if (commitHistoryUiItem.isSelected) {
+                MaterialTheme.colorScheme.primaryContainer
+            } else {
+                MaterialTheme.colorScheme.surfaceContainer
+            },
+        ),
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text(commitHistoryUiItem.subject, style = MaterialTheme.typography.titleSmall)
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                commitHistoryUiItem.id.take(8),
+                fontFamily = FontFamily.Monospace,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Text(
+                "${commitHistoryUiItem.authorName} ・ ${commitHistoryUiItem.authoredAt}",
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.bodySmall,
+            )
         }
     }
 }
@@ -257,11 +367,15 @@ private fun EmptyMessage(message: String) {
 private enum class DiffSource(val title: String) {
     WORKING_TREE("未コミット"),
     LATEST_COMMIT("最新コミット"),
+    COMMIT_HISTORY("履歴"),
 }
 
-private fun DiffSource.toRepositoryDiffSource(): RepositoryDiffSource = when (this) {
-    DiffSource.WORKING_TREE -> RepositoryDiffSource.WORKING_TREE
-    DiffSource.LATEST_COMMIT -> RepositoryDiffSource.LATEST_COMMIT
+private fun DiffSource.toRepositoryDiffSource(selectedCommitId: String?): RepositoryDiffSource? = when (this) {
+    DiffSource.WORKING_TREE -> RepositoryDiffSource.WorkingTree
+    DiffSource.LATEST_COMMIT -> RepositoryDiffSource.LatestCommit
+    DiffSource.COMMIT_HISTORY -> selectedCommitId?.let { commitId ->
+        RepositoryDiffSource.Commit(commitId)
+    }
 }
 
 private fun RepositoryUiState.hasFiles(diffSource: DiffSource): Boolean = when (diffSource) {
@@ -269,4 +383,5 @@ private fun RepositoryUiState.hasFiles(diffSource: DiffSource): Boolean = when (
         diffSectionUiItem.fileItems.isNotEmpty()
     }
     DiffSource.LATEST_COMMIT -> latestCommit?.fileItems?.isNotEmpty() == true
+    DiffSource.COMMIT_HISTORY -> selectedCommit?.fileItems?.isNotEmpty() == true
 }

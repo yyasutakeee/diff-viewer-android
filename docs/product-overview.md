@@ -44,14 +44,17 @@ represent consistently.
 
 ### Local interface
 
-The helper listens on `127.0.0.1:8765` by default and exposes `GET /api/v1/diff`. The Android application sends
-the configured token in the `Authorization: Bearer <token>` header. Both the Android client and helper restrict
-communication to the loopback interface.
+The helper listens on `127.0.0.1:8765` by default and exposes `GET /api/v1/diff`, paged commit summaries through
+`GET /api/v1/commits?offset=<offset>`, and a selected commit's patch through
+`GET /api/v1/commits/<full-commit-id>/diff`. The Android application sends the configured token in the
+`Authorization: Bearer <token>` header. Both the Android client and helper restrict communication to the loopback
+interface.
 
-The response is JSON organized as repository, branch, latest commit, and three working-tree sections: `unstaged`,
-`staged`, and `untracked`. The latest commit contains its full ID, subject, and first-parent patch. Each section or
-commit contains files, each file contains hunks, and each hunk contains typed lines with old and new line numbers.
-Supported line types are `context`, `addition`, `deletion`, and `meta`.
+The initial response is JSON organized as repository, branch, latest commit, the first 20 commit summaries, and
+three working-tree sections: `unstaged`, `staged`, and `untracked`. Commit summaries contain the full ID, subject,
+author, and authored timestamp. The latest or selected commit contains those values plus its first-parent patch.
+Each section or commit contains files, each file contains hunks, and each hunk contains typed lines with old and
+new line numbers. Supported line types are `context`, `addition`, `deletion`, and `meta`.
 
 The Android application stores the endpoint and token in its private preferences for convenience. They are not
 written to the Git repository.
@@ -133,6 +136,8 @@ The first useful version will target this repository and provide:
 12. Clear empty, loading, helper-unavailable, and Git-error states.
 13. A switch between uncommitted changes and the latest commit.
 14. Automatic latest-commit selection when the working tree has no changes.
+15. A paged commit-history selector that loads 20 summaries at a time and displays any selected commit against its
+    first parent, including the repository's initial commit against an empty tree.
 
 Untracked files must be represented explicitly. Plain `git diff` does not include their contents, so the Termux
 helper must handle them separately rather than making them silently disappear.
@@ -146,6 +151,8 @@ The helper is part of the product even though it runs outside the APK. It must:
 - Run Git with a fixed argument set instead of concatenating user-controlled shell commands.
 - Obtain repository status, staged diff, unstaged diff, and untracked-file information.
 - Obtain the latest commit metadata and its first-parent diff, including the repository's initial commit.
+- Return first-parent commit history in pages of 20 summaries and obtain a selected full commit ID's first-parent
+  diff without accepting arbitrary Git arguments.
 - Convert Git output into a structured response that preserves file boundaries, hunks, line types, and line
   numbers.
 - Reject requests without the configured bearer token.
@@ -195,7 +202,7 @@ These may be considered later only after the read-only diff workflow is reliable
 - Offer unified and side-by-side layouts.
 - Remember scroll position per file.
 - Refresh automatically while the application is visible.
-- Display commit-to-commit or branch-to-branch comparisons.
+- Display arbitrary commit-to-commit or branch-to-branch comparisons instead of a commit's fixed first-parent diff.
 
 ## Product principles
 

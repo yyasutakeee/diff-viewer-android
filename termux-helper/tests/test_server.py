@@ -30,13 +30,14 @@ class RepositoryDiffTests(unittest.TestCase):
     def tearDown(self) -> None:
         self.temporary_directory.cleanup()
 
-    def run_git(self, *arguments: str) -> None:
-        subprocess.run(
+    def run_git(self, *arguments: str) -> str:
+        completed_process = subprocess.run(
             ["git", "-C", str(self.repository), *arguments],
             check=True,
             capture_output=True,
             text=True,
         )
+        return completed_process.stdout.strip()
 
     def section(self, repository_diff: dict, kind: str) -> dict:
         return next(
@@ -106,6 +107,62 @@ class RepositoryDiffTests(unittest.TestCase):
             [line["content"] for line in latest_commit_lines],
             ["first", "second"],
         )
+
+    def test_returns_commit_history_in_newest_first_order(self) -> None:
+        (self.repository / "sample.txt").write_text("second commit\n", encoding="utf-8")
+        self.run_git("add", "sample.txt")
+        self.run_git("commit", "-m", "Second")
+
+        repository_diff = SERVER.build_repository_diff(self.repository)
+
+        commit_summary_items = repository_diff["commitHistory"]["commits"]
+        self.assertEqual(
+            [commit_summary["subject"] for commit_summary in commit_summary_items],
+            ["Second", "Initial"],
+        )
+        self.assertIsNone(repository_diff["commitHistory"]["nextOffset"])
+        self.assertEqual(commit_summary_items[0]["authorName"], "Diff Viewer Test")
+        self.assertTrue(commit_summary_items[0]["authoredAt"])
+
+    def test_paginates_commit_history_twenty_commits_at_a_time(self) -> None:
+        for commit_number in range(1, 22):
+            (self.repository / "sample.txt").write_text(
+                f"commit {commit_number}\n",
+                encoding="utf-8",
+            )
+            self.run_git("add", "sample.txt")
+            self.run_git("commit", "-m", f"Commit {commit_number}")
+
+        git_command_runner = SERVER.GitCommandRunner(self.repository)
+        first_page = SERVER.build_commit_history_page(git_command_runner, offset=0)
+        second_page = SERVER.build_commit_history_page(git_command_runner, offset=20)
+
+        self.assertEqual(len(first_page["commits"]), 20)
+        self.assertEqual(first_page["nextOffset"], 20)
+        self.assertEqual(len(second_page["commits"]), 2)
+        self.assertIsNone(second_page["nextOffset"])
+
+    def test_returns_selected_older_commit_diff(self) -> None:
+        initial_commit_id = self.run_git("rev-parse", "HEAD")
+        (self.repository / "sample.txt").write_text("second commit\n", encoding="utf-8")
+        self.run_git("add", "sample.txt")
+        self.run_git("commit", "-m", "Second")
+
+        selected_commit = SERVER.build_commit_diff(
+            SERVER.GitCommandRunner(self.repository),
+            initial_commit_id,
+        )
+
+        self.assertEqual(selected_commit["id"], initial_commit_id)
+        self.assertEqual(selected_commit["subject"], "Initial")
+        self.assertEqual(selected_commit["files"][0]["status"], "added")
+
+    def test_rejects_invalid_selected_commit_id(self) -> None:
+        with self.assertRaisesRegex(SERVER.GitCommandError, "Invalid commit ID"):
+            SERVER.build_commit_diff(
+                SERVER.GitCommandRunner(self.repository),
+                "HEAD~1",
+            )
 
     def test_marks_binary_untracked_file_without_returning_content(self) -> None:
         (self.repository / "binary.dat").write_bytes(b"before\0after")

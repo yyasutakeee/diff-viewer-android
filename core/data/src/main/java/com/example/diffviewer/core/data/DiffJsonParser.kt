@@ -1,5 +1,8 @@
 package com.example.diffviewer.core.data
 
+import com.example.diffviewer.core.domain.CommitDiff
+import com.example.diffviewer.core.domain.CommitHistoryPage
+import com.example.diffviewer.core.domain.CommitSummary
 import com.example.diffviewer.core.domain.DiffHunk
 import com.example.diffviewer.core.domain.DiffLine
 import com.example.diffviewer.core.domain.DiffLineKind
@@ -7,7 +10,6 @@ import com.example.diffviewer.core.domain.DiffSection
 import com.example.diffviewer.core.domain.DiffSectionKind
 import com.example.diffviewer.core.domain.FileDiff
 import com.example.diffviewer.core.domain.FileDiffStatus
-import com.example.diffviewer.core.domain.LatestCommit
 import com.example.diffviewer.core.domain.RepositoryDiff
 import org.json.JSONArray
 import org.json.JSONObject
@@ -17,15 +19,35 @@ internal fun parseRepositoryDiff(jsonText: String): RepositoryDiff {
     return RepositoryDiff(
         repository = rootObject.getString("repository"),
         branch = rootObject.getString("branch"),
-        latestCommit = parseLatestCommit(rootObject.getJSONObject("latestCommit")),
+        latestCommit = parseCommitDiff(rootObject.getJSONObject("latestCommit")),
+        commitHistoryPage = parseCommitHistoryPage(rootObject.getJSONObject("commitHistory")),
         sections = rootObject.getJSONArray("sections").mapObjects(::parseDiffSection),
     )
 }
 
-private fun parseLatestCommit(jsonObject: JSONObject): LatestCommit = LatestCommit(
+internal fun parseCommitDiff(jsonText: String): CommitDiff = parseCommitDiff(JSONObject(jsonText))
+
+private fun parseCommitDiff(jsonObject: JSONObject): CommitDiff = CommitDiff(
     id = jsonObject.getString("id"),
     subject = jsonObject.getString("subject"),
+    authorName = jsonObject.getString("authorName"),
+    authoredAt = jsonObject.getString("authoredAt"),
     fileDiffItems = jsonObject.getJSONArray("files").mapObjects(::parseFileDiff),
+)
+
+internal fun parseCommitHistoryPage(jsonText: String): CommitHistoryPage =
+    parseCommitHistoryPage(JSONObject(jsonText))
+
+private fun parseCommitHistoryPage(jsonObject: JSONObject): CommitHistoryPage = CommitHistoryPage(
+    commitSummaryItems = jsonObject.getJSONArray("commits").mapObjects(::parseCommitSummary),
+    nextOffset = jsonObject.optionalInt("nextOffset"),
+)
+
+private fun parseCommitSummary(jsonObject: JSONObject): CommitSummary = CommitSummary(
+    id = jsonObject.getString("id"),
+    subject = jsonObject.getString("subject"),
+    authorName = jsonObject.getString("authorName"),
+    authoredAt = jsonObject.getString("authoredAt"),
 )
 
 private fun parseDiffSection(jsonObject: JSONObject): DiffSection = DiffSection(
