@@ -5,6 +5,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.lifecycle.lifecycleScope
+import com.example.diffviewer.core.data.GitHubDiffRepository
 import com.example.diffviewer.core.data.SharedPreferencesConnectionSettingsRepository
 import com.example.diffviewer.core.data.TermuxDiffRepository
 import com.example.diffviewer.core.designsystem.DiffViewerTheme
@@ -19,6 +20,7 @@ class MainActivity : ComponentActivity() {
         val diffDisplaySettingsStore = DiffDisplaySettingsStore(sharedPreferences)
         val appStore = AppStore(
             diffRepository = TermuxDiffRepository(),
+            githubDiffRepository = GitHubDiffRepository(),
             connectionSettingsRepository = connectionSettingsRepository,
             coroutineScope = lifecycleScope,
         )

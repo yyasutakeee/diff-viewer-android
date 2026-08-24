@@ -11,6 +11,7 @@ fun FileDiff.toDiffFileDisplay(fileId: String): DiffFileDisplay = DiffFileDispla
     id = fileId,
     path = path ?: "不明なファイル",
     isBinary = isBinary,
+    contentUnavailableMessage = contentUnavailableMessage,
     hunkDisplays = hunkItems.mapIndexed { hunkIndex, diffHunk ->
         DiffHunkDisplay(
             id = "$fileId:hunk:$hunkIndex",

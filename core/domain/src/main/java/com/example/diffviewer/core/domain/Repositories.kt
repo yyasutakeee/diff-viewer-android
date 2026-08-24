@@ -22,4 +22,11 @@ interface ConnectionSettingsRepository {
 data class ConnectionSettings(
     val endpoint: String = "http://127.0.0.1:8765",
     val token: String = "",
+    val githubRepositoryUrl: String = "https://github.com/yyasutakeee/diff-viewer-android",
+    val repositorySource: RepositorySource = RepositorySource.TERMUX,
 )
+
+enum class RepositorySource {
+    TERMUX,
+    GITHUB,
+}

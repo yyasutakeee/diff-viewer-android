@@ -9,10 +9,16 @@ interface RepositoryViewModel {
 
 sealed interface RepositoryEvent {
     data class Refresh(val endpoint: String, val token: String) : RepositoryEvent
+    data class RefreshGitHub(val repositoryUrl: String) : RepositoryEvent
     data class OpenFile(val fileId: String) : RepositoryEvent
     data class SelectCommit(val commitId: String) : RepositoryEvent
     data object LoadMoreCommits : RepositoryEvent
     data class OpenAllDiffs(val repositoryDiffSource: RepositoryDiffSource) : RepositoryEvent
+}
+
+enum class RepositoryConnectionSource {
+    TERMUX,
+    GITHUB,
 }
 
 sealed interface RepositoryDiffSource {
@@ -24,6 +30,8 @@ sealed interface RepositoryDiffSource {
 data class RepositoryUiState(
     val endpoint: String = "",
     val token: String = "",
+    val githubRepositoryUrl: String = "",
+    val repositoryConnectionSource: RepositoryConnectionSource = RepositoryConnectionSource.TERMUX,
     val repositoryName: String? = null,
     val repositoryPath: String? = null,
     val branchSummary: String? = null,
@@ -65,6 +73,7 @@ data class FileDiffUiItem(
     val path: String,
     val status: String,
     val isBinary: Boolean,
+    val contentUnavailableMessage: String?,
     val additionCount: Int,
     val deletionCount: Int,
 )

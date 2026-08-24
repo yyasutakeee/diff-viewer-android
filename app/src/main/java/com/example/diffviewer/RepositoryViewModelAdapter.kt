@@ -7,11 +7,13 @@ import com.example.diffviewer.core.domain.ConnectionSettings
 import com.example.diffviewer.core.domain.DiffSectionKind
 import com.example.diffviewer.core.domain.FileDiff
 import com.example.diffviewer.core.domain.FileDiffStatus
+import com.example.diffviewer.core.domain.RepositorySource
 import com.example.diffviewer.feature.repository.DiffSectionUiItem
 import com.example.diffviewer.feature.repository.FileDiffUiItem
 import com.example.diffviewer.feature.repository.CommitDiffUiItem
 import com.example.diffviewer.feature.repository.CommitHistoryUiItem
 import com.example.diffviewer.feature.repository.RepositoryEvent
+import com.example.diffviewer.feature.repository.RepositoryConnectionSource
 import com.example.diffviewer.feature.repository.RepositoryDiffSource
 import com.example.diffviewer.feature.repository.RepositoryUiState
 import com.example.diffviewer.feature.repository.RepositoryViewModel
@@ -50,6 +52,7 @@ class RepositoryViewModelAdapter(
             is RepositoryEvent.Refresh -> appStore.refreshRepositoryDiff(
                 ConnectionSettings(endpoint = event.endpoint, token = event.token)
             )
+            is RepositoryEvent.RefreshGitHub -> appStore.refreshGitHubRepositoryDiff(event.repositoryUrl)
             is RepositoryEvent.OpenFile -> findFileDiffSelectionTarget(event.fileId)?.let(openFile)
             is RepositoryEvent.SelectCommit -> appStore.selectCommit(event.commitId)
             RepositoryEvent.LoadMoreCommits -> appStore.loadMoreCommitHistory()
@@ -140,10 +143,15 @@ private fun mapRepositoryUiState(
     val repositoryUiState = RepositoryUiState(
         endpoint = appState.connectionSettings.endpoint,
         token = appState.connectionSettings.token,
+        githubRepositoryUrl = appState.connectionSettings.githubRepositoryUrl,
+        repositoryConnectionSource = appState.connectionSettings.repositorySource.toUiSource(),
         repositoryName = repositoryDiff?.repository?.substringAfterLast('/'),
         repositoryPath = repositoryDiff?.repository,
-        branchSummary = repositoryDiff?.let {
-            "${it.branch} ・ ${it.changedFileCount}ファイル変更"
+        branchSummary = repositoryDiff?.let { diff ->
+            when (appState.connectionSettings.repositorySource) {
+                RepositorySource.TERMUX -> "${diff.branch} ・ ${diff.changedFileCount}ファイル変更"
+                RepositorySource.GITHUB -> "${diff.branch} ・ GitHub"
+            }
         },
         latestCommit = latestCommitUiItem,
         commitHistoryItems = appState.commitSummaryItems.map { commitSummary ->
@@ -227,9 +235,15 @@ private fun FileDiff.toUiItem(fileId: String): FileDiffUiItem = FileDiffUiItem(
     path = path ?: "不明なファイル",
     status = status.displayName(),
     isBinary = isBinary,
+    contentUnavailableMessage = contentUnavailableMessage,
     additionCount = additionCount,
     deletionCount = deletionCount,
 )
+
+private fun RepositorySource.toUiSource(): RepositoryConnectionSource = when (this) {
+    RepositorySource.TERMUX -> RepositoryConnectionSource.TERMUX
+    RepositorySource.GITHUB -> RepositoryConnectionSource.GITHUB
+}
 
 private fun DiffSectionKind.displayName(): String = when (this) {
     DiffSectionKind.UNSTAGED -> "未ステージ"
