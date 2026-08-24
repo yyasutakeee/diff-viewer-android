@@ -22,9 +22,11 @@ class MainActivity : ComponentActivity() {
             secretCipher = AndroidKeystoreSecretCipher(),
         )
         val diffDisplaySettingsStore = DiffDisplaySettingsStore(sharedPreferences)
+        val githubRepository = GitHubDiffRepository()
         val appStore = AppStore(
             diffRepository = TermuxDiffRepository(),
-            githubDiffRepository = GitHubDiffRepository(),
+            githubDiffRepository = githubRepository,
+            githubRepositoryCatalog = githubRepository,
             connectionSettingsRepository = connectionSettingsRepository,
             coroutineScope = lifecycleScope,
         )

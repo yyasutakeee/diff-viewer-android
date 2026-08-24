@@ -31,6 +31,18 @@ data class CommitSummary(
     val authoredAt: String,
 )
 
+data class GitHubRepositoryCatalogPage(
+    val githubRepositorySummaryItems: List<GitHubRepositorySummary>,
+    val nextPage: Int?,
+)
+
+data class GitHubRepositorySummary(
+    val nameWithOwner: String,
+    val url: String,
+    val isPrivate: Boolean,
+    val updatedAt: String,
+)
+
 data class DiffSection(
     val kind: DiffSectionKind,
     val fileDiffItems: List<FileDiff>,

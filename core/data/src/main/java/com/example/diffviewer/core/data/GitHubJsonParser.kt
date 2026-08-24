@@ -5,8 +5,29 @@ import com.example.diffviewer.core.domain.CommitHistoryPage
 import com.example.diffviewer.core.domain.CommitSummary
 import com.example.diffviewer.core.domain.FileDiff
 import com.example.diffviewer.core.domain.FileDiffStatus
+import com.example.diffviewer.core.domain.GitHubRepositoryCatalogPage
+import com.example.diffviewer.core.domain.GitHubRepositorySummary
 import org.json.JSONArray
 import org.json.JSONObject
+
+internal fun parseGitHubRepositoryCatalogPage(
+    jsonText: String,
+    page: Int,
+    hasNextPage: Boolean,
+): GitHubRepositoryCatalogPage {
+    val githubRepositorySummaryItems = JSONArray(jsonText).mapObjects { repositoryObject ->
+        GitHubRepositorySummary(
+            nameWithOwner = repositoryObject.getString("full_name"),
+            url = repositoryObject.getString("html_url"),
+            isPrivate = repositoryObject.getBoolean("private"),
+            updatedAt = repositoryObject.getString("updated_at"),
+        )
+    }
+    return GitHubRepositoryCatalogPage(
+        githubRepositorySummaryItems = githubRepositorySummaryItems,
+        nextPage = if (hasNextPage) page + 1 else null,
+    )
+}
 
 internal fun parseGitHubCommitHistoryPage(
     jsonText: String,

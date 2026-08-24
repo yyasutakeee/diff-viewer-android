@@ -8,10 +8,12 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.weight
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
@@ -19,9 +21,12 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -49,6 +54,7 @@ fun RepositoryScreen(viewModel: RepositoryViewModel) {
     var selectedConnectionSource by rememberSaveable {
         mutableStateOf(repositoryUiState.repositoryConnectionSource)
     }
+    var isGitHubRepositoryPickerVisible by rememberSaveable { mutableStateOf(false) }
     var selectedSource by rememberSaveable { mutableStateOf(DiffSource.WORKING_TREE) }
     val selectedRepositoryDiffSource = selectedSource.toRepositoryDiffSource(
         repositoryUiState.selectedCommit?.id
@@ -117,6 +123,10 @@ fun RepositoryScreen(viewModel: RepositoryViewModel) {
                     isLoading = repositoryUiState.isLoading,
                     onRepositoryUrlChange = { githubRepositoryUrl = it },
                     onTokenChange = { githubToken = it },
+                    onOpenRepositoryPicker = {
+                        isGitHubRepositoryPickerVisible = true
+                        viewModel.send(RepositoryEvent.RefreshGitHubRepositories(githubToken))
+                    },
                     onRefresh = {
                         viewModel.send(RepositoryEvent.RefreshGitHub(githubRepositoryUrl, githubToken))
                     },
@@ -153,6 +163,23 @@ fun RepositoryScreen(viewModel: RepositoryViewModel) {
                 DiffSource.COMMIT_HISTORY -> commitHistoryItems(repositoryUiState, viewModel)
             }
         }
+    }
+    if (isGitHubRepositoryPickerVisible) {
+        GitHubRepositoryPickerSheet(
+            repositoryUiState = repositoryUiState,
+            dismiss = { isGitHubRepositoryPickerVisible = false },
+            loadMore = { viewModel.send(RepositoryEvent.LoadMoreGitHubRepositories) },
+            selectRepository = { githubRepositoryUiItem ->
+                githubRepositoryUrl = githubRepositoryUiItem.url
+                isGitHubRepositoryPickerVisible = false
+                viewModel.send(
+                    RepositoryEvent.RefreshGitHub(
+                        repositoryUrl = githubRepositoryUiItem.url,
+                        token = githubToken,
+                    )
+                )
+            },
+        )
     }
 }
 
@@ -348,6 +375,7 @@ private fun GitHubConnectionCard(
     isLoading: Boolean,
     onRepositoryUrlChange: (String) -> Unit,
     onTokenChange: (String) -> Unit,
+    onOpenRepositoryPicker: () -> Unit,
     onRefresh: () -> Unit,
 ) {
     Card(modifier = Modifier.fillMaxWidth()) {
@@ -369,6 +397,13 @@ private fun GitHubConnectionCard(
                 singleLine = true,
                 visualTransformation = PasswordVisualTransformation(),
             )
+            Button(
+                onClick = onOpenRepositoryPicker,
+                enabled = !isLoading,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text("リポジトリを選ぶ")
+            }
             Text(
                 "公開またはアクセスを許可したプライベートリポジトリを表示します。" +
                     "Termuxサーバーは不要です。",
@@ -388,6 +423,114 @@ private fun GitHubConnectionCard(
                 }
             }
         }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun GitHubRepositoryPickerSheet(
+    repositoryUiState: RepositoryUiState,
+    dismiss: () -> Unit,
+    loadMore: () -> Unit,
+    selectRepository: (GitHubRepositoryUiItem) -> Unit,
+) {
+    var searchQuery by rememberSaveable { mutableStateOf("") }
+    val matchingRepositoryItems = findMatchingGitHubRepositories(
+        repositoryUiState.githubRepositoryItems,
+        searchQuery,
+    )
+    ModalBottomSheet(onDismissRequest = dismiss) {
+        Column(
+            modifier = Modifier.fillMaxWidth().fillMaxHeight(0.9f).padding(horizontal = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Text("GitHubリポジトリを選択", style = MaterialTheme.typography.titleLarge)
+            OutlinedTextField(
+                value = searchQuery,
+                onValueChange = { searchQuery = it },
+                modifier = Modifier.fillMaxWidth(),
+                label = { Text("リポジトリ名を検索") },
+                singleLine = true,
+            )
+            repositoryUiState.githubRepositoryErrorMessage?.let { errorMessage ->
+                ErrorCard(errorMessage)
+            }
+            if (
+                repositoryUiState.isLoadingGitHubRepositories &&
+                repositoryUiState.githubRepositoryItems.isEmpty()
+            ) {
+                Box(modifier = Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator()
+                }
+            } else if (matchingRepositoryItems.isEmpty()) {
+                EmptyMessage("一致するリポジトリはありません")
+            } else {
+                LazyColumn(
+                    modifier = Modifier.fillMaxWidth().weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    items(
+                        items = matchingRepositoryItems,
+                        key = { githubRepositoryUiItem -> githubRepositoryUiItem.url },
+                    ) { githubRepositoryUiItem ->
+                        GitHubRepositoryPickerItem(githubRepositoryUiItem) {
+                            selectRepository(githubRepositoryUiItem)
+                        }
+                    }
+                    if (repositoryUiState.hasMoreGitHubRepositories) {
+                        item {
+                            Button(
+                                onClick = loadMore,
+                                enabled = !repositoryUiState.isLoadingGitHubRepositories,
+                                modifier = Modifier.fillMaxWidth(),
+                            ) {
+                                Text(
+                                    if (repositoryUiState.isLoadingGitHubRepositories) {
+                                        "読み込み中"
+                                    } else {
+                                        "さらに読み込む"
+                                    }
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+            TextButton(onClick = dismiss, modifier = Modifier.fillMaxWidth()) { Text("閉じる") }
+        }
+    }
+}
+
+@Composable
+private fun GitHubRepositoryPickerItem(
+    githubRepositoryUiItem: GitHubRepositoryUiItem,
+    select: () -> Unit,
+) {
+    Card(modifier = Modifier.fillMaxWidth().clickable(onClick = select)) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text(
+                githubRepositoryUiItem.nameWithOwner,
+                style = MaterialTheme.typography.titleSmall,
+                fontFamily = FontFamily.Monospace,
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                "${githubRepositoryUiItem.visibilityLabel} ・ ${githubRepositoryUiItem.updatedAt}",
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.bodySmall,
+            )
+        }
+    }
+}
+
+private fun findMatchingGitHubRepositories(
+    githubRepositoryUiItems: List<GitHubRepositoryUiItem>,
+    searchQuery: String,
+): List<GitHubRepositoryUiItem> {
+    val normalizedSearchQuery = searchQuery.trim()
+    if (normalizedSearchQuery.isEmpty()) return githubRepositoryUiItems
+    return githubRepositoryUiItems.filter { githubRepositoryUiItem ->
+        githubRepositoryUiItem.nameWithOwner.contains(normalizedSearchQuery, ignoreCase = true)
     }
 }
 

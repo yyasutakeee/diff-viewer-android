@@ -10,6 +10,8 @@ interface RepositoryViewModel {
 sealed interface RepositoryEvent {
     data class Refresh(val endpoint: String, val token: String) : RepositoryEvent
     data class RefreshGitHub(val repositoryUrl: String, val token: String) : RepositoryEvent
+    data class RefreshGitHubRepositories(val token: String) : RepositoryEvent
+    data object LoadMoreGitHubRepositories : RepositoryEvent
     data class OpenFile(val fileId: String) : RepositoryEvent
     data class SelectCommit(val commitId: String) : RepositoryEvent
     data object LoadMoreCommits : RepositoryEvent
@@ -40,12 +42,23 @@ data class RepositoryUiState(
     val commitHistoryItems: List<CommitHistoryUiItem> = emptyList(),
     val selectedCommit: CommitDiffUiItem? = null,
     val workingTreeSectionItems: List<DiffSectionUiItem> = emptyList(),
+    val githubRepositoryItems: List<GitHubRepositoryUiItem> = emptyList(),
     val isLoading: Boolean = false,
     val isLoadingCommitHistory: Boolean = false,
     val isLoadingSelectedCommit: Boolean = false,
+    val isLoadingGitHubRepositories: Boolean = false,
     val hasMoreCommits: Boolean = false,
     val errorMessage: String? = null,
     val commitHistoryErrorMessage: String? = null,
+    val githubRepositoryErrorMessage: String? = null,
+    val hasMoreGitHubRepositories: Boolean = false,
+)
+
+data class GitHubRepositoryUiItem(
+    val nameWithOwner: String,
+    val url: String,
+    val visibilityLabel: String,
+    val updatedAt: String,
 )
 
 data class CommitDiffUiItem(

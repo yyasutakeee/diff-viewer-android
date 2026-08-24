@@ -3,6 +3,8 @@ package com.example.diffviewer.core.data
 import com.example.diffviewer.core.domain.CommitDiff
 import com.example.diffviewer.core.domain.CommitHistoryPage
 import com.example.diffviewer.core.domain.DiffRepository
+import com.example.diffviewer.core.domain.GitHubRepositoryCatalog
+import com.example.diffviewer.core.domain.GitHubRepositoryCatalogPage
 import com.example.diffviewer.core.domain.RepositoryDiff
 import java.io.IOException
 import java.net.HttpURLConnection
@@ -11,7 +13,21 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 
-class GitHubDiffRepository : DiffRepository {
+class GitHubDiffRepository : DiffRepository, GitHubRepositoryCatalog {
+    override suspend fun fetchRepositoryCatalogPage(
+        token: String,
+        page: Int,
+    ): GitHubRepositoryCatalogPage = withContext(Dispatchers.IO) {
+        require(page >= 1)
+        val githubResponse = fetchGitHubResponse(
+            "/user/repos?affiliation=owner,collaborator,organization_member" +
+                "&visibility=all&sort=pushed&direction=desc" +
+                "&per_page=$GITHUB_REPOSITORY_CATALOG_PAGE_SIZE&page=$page",
+            token,
+        )
+        parseGitHubRepositoryCatalogPage(githubResponse.body, page, githubResponse.hasNextPage)
+    }
+
     override suspend fun fetchRepositoryDiff(endpoint: String, token: String): RepositoryDiff {
         return withContext(Dispatchers.IO) {
             val githubRepositoryIdentifier = parseGitHubRepositoryIdentifier(endpoint)
@@ -147,6 +163,7 @@ class GitHubDiffRepository : DiffRepository {
         private val REPOSITORY_PART_PATTERN = Regex("^[A-Za-z0-9_.-]+$")
         private const val GITHUB_COMMIT_FILE_PAGE_SIZE = 100
         private const val GITHUB_COMMIT_FILE_LIMIT = 3_000
+        private const val GITHUB_REPOSITORY_CATALOG_PAGE_SIZE = 100
 
         fun parseGitHubRepositoryIdentifier(value: String): GitHubRepositoryIdentifier {
             val normalized = value.trim().removeSuffix("/").removeSuffix(".git")
