@@ -7,6 +7,39 @@ import org.junit.Test
 
 class GitHubJsonParserTest {
     @Test
+    fun parsesRepositoryCatalogVisibilityAndNextPage() {
+        val githubRepositoryCatalogPage = parseGitHubRepositoryCatalogPage(
+            jsonText = """
+                [
+                  {
+                    "full_name": "example/private-project",
+                    "html_url": "https://github.com/example/private-project",
+                    "private": true,
+                    "updated_at": "2026-08-24T08:00:00Z"
+                  },
+                  {
+                    "full_name": "example/public-project",
+                    "html_url": "https://github.com/example/public-project",
+                    "private": false,
+                    "updated_at": "2026-08-23T08:00:00Z"
+                  }
+                ]
+            """.trimIndent(),
+            page = 2,
+            hasNextPage = true,
+        )
+
+        assertEquals(2, githubRepositoryCatalogPage.githubRepositorySummaryItems.size)
+        assertEquals(
+            "example/private-project",
+            githubRepositoryCatalogPage.githubRepositorySummaryItems[0].nameWithOwner,
+        )
+        assertEquals(true, githubRepositoryCatalogPage.githubRepositorySummaryItems[0].isPrivate)
+        assertEquals(false, githubRepositoryCatalogPage.githubRepositorySummaryItems[1].isPrivate)
+        assertEquals(3, githubRepositoryCatalogPage.nextPage)
+    }
+
+    @Test
     fun parsesCommitAndMarksMissingPatchAsUnavailable() {
         val commitDiff = parseGitHubCommitDiff(
             """

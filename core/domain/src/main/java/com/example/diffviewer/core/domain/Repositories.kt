@@ -19,6 +19,10 @@ interface ConnectionSettingsRepository {
     fun saveConnectionSettings(connectionSettings: ConnectionSettings)
 }
 
+interface GitHubRepositoryCatalog {
+    suspend fun fetchRepositoryCatalogPage(token: String, page: Int): GitHubRepositoryCatalogPage
+}
+
 data class ConnectionSettings(
     val endpoint: String = "http://127.0.0.1:8765",
     val token: String = "",

@@ -59,6 +59,12 @@ The selected source and both sources' connection values are stored in private ap
 sources does not discard the other source's saved values. GitHub mode cannot display uncommitted working-tree
 changes because those changes do not exist on GitHub; its available views are the latest commit and commit history.
 
+When a GitHub token is present, the connection card can request the authenticated account's accessible repository
+catalog from `GET /user/repos`. A modal picker displays public and private visibility, searches loaded repositories
+by owner/name, and requests additional pages in groups of 100. Selecting an item stores its canonical GitHub URL
+and immediately loads that repository. Direct URL entry remains available as a fallback. The catalog itself is
+session state and is not persisted.
+
 GitHub commit summaries and changed files are requested in pages and combined without silently truncating a
 multi-page commit. When GitHub omits a file's `patch` field, including unsupported, binary, or oversized content,
 the application keeps the file visible and explicitly reports that its line diff was unavailable. GitHub mode is
@@ -170,6 +176,8 @@ The first useful version will target this repository and provide:
     first parent, including the repository's initial commit against an empty tree.
 16. A saved Termux/GitHub source switch that can show the default branch's latest commit and paged commit history
     for a public or authorized private GitHub repository without starting the Termux helper.
+17. An authenticated, searchable repository picker that lists accessible public and private repositories in
+    recently pushed order, while preserving direct URL entry.
 
 Untracked files must be represented explicitly. Plain `git diff` does not include their contents, so the Termux
 helper must handle them separately rather than making them silently disappear.

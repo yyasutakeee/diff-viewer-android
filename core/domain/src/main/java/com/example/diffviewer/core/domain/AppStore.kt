@@ -13,19 +13,25 @@ data class AppState(
     val nextCommitHistoryOffset: Int? = null,
     val selectedCommitId: String? = null,
     val selectedCommitDiff: CommitDiff? = null,
+    val githubRepositorySummaryItems: List<GitHubRepositorySummary> = emptyList(),
+    val nextGitHubRepositoryCatalogPage: Int? = null,
     val isLoadingRepositoryDiff: Boolean = false,
     val isLoadingCommitHistory: Boolean = false,
     val isLoadingSelectedCommit: Boolean = false,
+    val isLoadingGitHubRepositoryCatalog: Boolean = false,
     val repositoryDiffErrorMessage: String? = null,
     val commitHistoryErrorMessage: String? = null,
+    val githubRepositoryCatalogErrorMessage: String? = null,
 )
 
 class AppStore(
     private val diffRepository: DiffRepository,
     private val githubDiffRepository: DiffRepository,
+    private val githubRepositoryCatalog: GitHubRepositoryCatalog,
     private val connectionSettingsRepository: ConnectionSettingsRepository,
     private val coroutineScope: CoroutineScope,
 ) {
+    private var githubRepositoryCatalogToken = ""
     private val mutableState = MutableStateFlow(
         AppState(connectionSettings = connectionSettingsRepository.loadConnectionSettings())
     )
@@ -132,6 +138,35 @@ class AppStore(
         }
     }
 
+    fun refreshGitHubRepositoryCatalog(githubToken: String) {
+        if (mutableState.value.isLoadingGitHubRepositoryCatalog) return
+        val normalizedGitHubToken = githubToken.trim()
+        if (normalizedGitHubToken.isEmpty()) {
+            mutableState.value = mutableState.value.copy(
+                githubRepositoryCatalogErrorMessage = "GitHubトークンを入力してください",
+            )
+            return
+        }
+        githubRepositoryCatalogToken = normalizedGitHubToken
+        mutableState.value = mutableState.value.copy(
+            githubRepositorySummaryItems = emptyList(),
+            nextGitHubRepositoryCatalogPage = null,
+            isLoadingGitHubRepositoryCatalog = true,
+            githubRepositoryCatalogErrorMessage = null,
+        )
+        fetchGitHubRepositoryCatalogPage(page = 1, replaceExistingItems = true)
+    }
+
+    fun loadMoreGitHubRepositories() {
+        val nextPage = mutableState.value.nextGitHubRepositoryCatalogPage ?: return
+        if (mutableState.value.isLoadingGitHubRepositoryCatalog) return
+        mutableState.value = mutableState.value.copy(
+            isLoadingGitHubRepositoryCatalog = true,
+            githubRepositoryCatalogErrorMessage = null,
+        )
+        fetchGitHubRepositoryCatalogPage(page = nextPage, replaceExistingItems = false)
+    }
+
     fun loadMoreCommitHistory() {
         val currentState = mutableState.value
         val nextOffset = currentState.nextCommitHistoryOffset ?: return
@@ -233,6 +268,37 @@ class AppStore(
             isLoadingSelectedCommit = false,
             commitHistoryErrorMessage = null,
         )
+    }
+
+    private fun fetchGitHubRepositoryCatalogPage(page: Int, replaceExistingItems: Boolean) {
+        val requestToken = githubRepositoryCatalogToken
+        coroutineScope.launch {
+            runCatching {
+                githubRepositoryCatalog.fetchRepositoryCatalogPage(requestToken, page)
+            }.onSuccess { githubRepositoryCatalogPage ->
+                if (githubRepositoryCatalogToken == requestToken) {
+                    val existingItems = if (replaceExistingItems) {
+                        emptyList()
+                    } else {
+                        mutableState.value.githubRepositorySummaryItems
+                    }
+                    mutableState.value = mutableState.value.copy(
+                        githubRepositorySummaryItems = existingItems +
+                            githubRepositoryCatalogPage.githubRepositorySummaryItems,
+                        nextGitHubRepositoryCatalogPage = githubRepositoryCatalogPage.nextPage,
+                        isLoadingGitHubRepositoryCatalog = false,
+                    )
+                }
+            }.onFailure { error ->
+                if (githubRepositoryCatalogToken == requestToken) {
+                    mutableState.value = mutableState.value.copy(
+                        isLoadingGitHubRepositoryCatalog = false,
+                        githubRepositoryCatalogErrorMessage = error.message
+                            ?: "GitHubリポジトリ一覧を取得できませんでした",
+                    )
+                }
+            }
+        }
     }
 
     private fun applyRepositoryDiffFailure(error: Throwable) {

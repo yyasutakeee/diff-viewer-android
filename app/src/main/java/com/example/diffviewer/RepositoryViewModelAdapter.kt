@@ -10,6 +10,7 @@ import com.example.diffviewer.core.domain.FileDiffStatus
 import com.example.diffviewer.core.domain.RepositorySource
 import com.example.diffviewer.feature.repository.DiffSectionUiItem
 import com.example.diffviewer.feature.repository.FileDiffUiItem
+import com.example.diffviewer.feature.repository.GitHubRepositoryUiItem
 import com.example.diffviewer.feature.repository.CommitDiffUiItem
 import com.example.diffviewer.feature.repository.CommitHistoryUiItem
 import com.example.diffviewer.feature.repository.RepositoryEvent
@@ -56,6 +57,10 @@ class RepositoryViewModelAdapter(
                 githubRepositoryUrl = event.repositoryUrl,
                 githubToken = event.token,
             )
+            is RepositoryEvent.RefreshGitHubRepositories -> {
+                appStore.refreshGitHubRepositoryCatalog(event.token)
+            }
+            RepositoryEvent.LoadMoreGitHubRepositories -> appStore.loadMoreGitHubRepositories()
             is RepositoryEvent.OpenFile -> findFileDiffSelectionTarget(event.fileId)?.let(openFile)
             is RepositoryEvent.SelectCommit -> appStore.selectCommit(event.commitId)
             RepositoryEvent.LoadMoreCommits -> appStore.loadMoreCommitHistory()
@@ -169,12 +174,23 @@ private fun mapRepositoryUiState(
         },
         selectedCommit = selectedCommitUiItem,
         workingTreeSectionItems = sectionUiItems,
+        githubRepositoryItems = appState.githubRepositorySummaryItems.map { githubRepositorySummary ->
+            GitHubRepositoryUiItem(
+                nameWithOwner = githubRepositorySummary.nameWithOwner,
+                url = githubRepositorySummary.url,
+                visibilityLabel = if (githubRepositorySummary.isPrivate) "プライベート" else "公開",
+                updatedAt = githubRepositorySummary.updatedAt,
+            )
+        },
         isLoading = appState.isLoadingRepositoryDiff,
         isLoadingCommitHistory = appState.isLoadingCommitHistory,
         isLoadingSelectedCommit = appState.isLoadingSelectedCommit,
+        isLoadingGitHubRepositories = appState.isLoadingGitHubRepositoryCatalog,
         hasMoreCommits = appState.nextCommitHistoryOffset != null,
         errorMessage = appState.repositoryDiffErrorMessage,
         commitHistoryErrorMessage = appState.commitHistoryErrorMessage,
+        githubRepositoryErrorMessage = appState.githubRepositoryCatalogErrorMessage,
+        hasMoreGitHubRepositories = appState.nextGitHubRepositoryCatalogPage != null,
     )
     val allDiffsSelectionTargetsBySource = buildAllDiffsSelectionTargets(appState)
     return RepositoryUiMapping(
