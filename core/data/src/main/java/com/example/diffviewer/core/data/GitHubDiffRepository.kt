@@ -15,14 +15,24 @@ class GitHubDiffRepository : DiffRepository {
     override suspend fun fetchRepositoryDiff(endpoint: String, token: String): RepositoryDiff {
         return withContext(Dispatchers.IO) {
             val githubRepositoryIdentifier = parseGitHubRepositoryIdentifier(endpoint)
-            val repositoryObject = JSONObject(fetchGitHubResponse(githubRepositoryIdentifier.apiPath).body)
+            val repositoryObject = JSONObject(
+                fetchGitHubResponse(githubRepositoryIdentifier.apiPath, token).body
+            )
             val defaultBranch = repositoryObject.getString("default_branch")
-            val commitHistoryPage = fetchCommitHistoryPageOnIoDispatcher(githubRepositoryIdentifier, 1)
+            val commitHistoryPage = fetchCommitHistoryPageOnIoDispatcher(
+                githubRepositoryIdentifier,
+                token,
+                1,
+            )
             val latestCommitSummary = findLatestCommitSummary(commitHistoryPage)
             RepositoryDiff(
                 repository = repositoryObject.getString("full_name"),
                 branch = defaultBranch,
-                latestCommit = fetchCommitDiffOnIoDispatcher(githubRepositoryIdentifier, latestCommitSummary.id),
+                latestCommit = fetchCommitDiffOnIoDispatcher(
+                    githubRepositoryIdentifier,
+                    token,
+                    latestCommitSummary.id,
+                ),
                 commitHistoryPage = commitHistoryPage,
                 sections = emptyList(),
             )
@@ -34,7 +44,7 @@ class GitHubDiffRepository : DiffRepository {
         token: String,
         offset: Int,
     ): CommitHistoryPage = withContext(Dispatchers.IO) {
-        fetchCommitHistoryPageOnIoDispatcher(parseGitHubRepositoryIdentifier(endpoint), offset)
+        fetchCommitHistoryPageOnIoDispatcher(parseGitHubRepositoryIdentifier(endpoint), token, offset)
     }
 
     override suspend fun fetchCommitDiff(
@@ -43,22 +53,25 @@ class GitHubDiffRepository : DiffRepository {
         commitId: String,
     ): CommitDiff = withContext(Dispatchers.IO) {
         require(COMMIT_ID_PATTERN.matches(commitId))
-        fetchCommitDiffOnIoDispatcher(parseGitHubRepositoryIdentifier(endpoint), commitId)
+        fetchCommitDiffOnIoDispatcher(parseGitHubRepositoryIdentifier(endpoint), token, commitId)
     }
 
     private fun fetchCommitHistoryPageOnIoDispatcher(
         githubRepositoryIdentifier: GitHubRepositoryIdentifier,
+        token: String,
         page: Int,
     ): CommitHistoryPage {
         require(page >= 1)
         val githubResponse = fetchGitHubResponse(
-            "${githubRepositoryIdentifier.apiPath}/commits?per_page=$GITHUB_COMMIT_PAGE_SIZE&page=$page"
+            "${githubRepositoryIdentifier.apiPath}/commits?per_page=$GITHUB_COMMIT_PAGE_SIZE&page=$page",
+            token,
         )
         return parseGitHubCommitHistoryPage(githubResponse.body, page, githubResponse.hasNextPage)
     }
 
     private fun fetchCommitDiffOnIoDispatcher(
         githubRepositoryIdentifier: GitHubRepositoryIdentifier,
+        token: String,
         commitId: String,
     ): CommitDiff {
         var page = 1
@@ -67,7 +80,8 @@ class GitHubDiffRepository : DiffRepository {
         do {
             val githubResponse = fetchGitHubResponse(
                 "${githubRepositoryIdentifier.apiPath}/commits/$commitId" +
-                    "?per_page=$GITHUB_COMMIT_FILE_PAGE_SIZE&page=$page"
+                    "?per_page=$GITHUB_COMMIT_FILE_PAGE_SIZE&page=$page",
+                token,
             )
             val commitDiffPage = parseGitHubCommitDiff(
                 githubResponse.body
@@ -94,7 +108,7 @@ class GitHubDiffRepository : DiffRepository {
         commitHistoryPage.commitSummaryItems.firstOrNull()
             ?: throw IOException("GitHubリポジトリにコミットがありません")
 
-    private fun fetchGitHubResponse(apiPath: String): GitHubResponse {
+    private fun fetchGitHubResponse(apiPath: String, token: String): GitHubResponse {
         val connection = URL("https://api.github.com$apiPath").openConnection() as HttpURLConnection
         try {
             connection.requestMethod = "GET"
@@ -103,6 +117,9 @@ class GitHubDiffRepository : DiffRepository {
             connection.setRequestProperty("Accept", "application/vnd.github+json")
             connection.setRequestProperty("X-GitHub-Api-Version", "2026-03-10")
             connection.setRequestProperty("User-Agent", "Diff-Viewer-Android")
+            githubAuthorizationHeaderValue(token)?.let { authorizationHeaderValue ->
+                connection.setRequestProperty("Authorization", authorizationHeaderValue)
+            }
             val responseCode = connection.responseCode
             val responseText = (if (responseCode in 200..299) connection.inputStream else connection.errorStream)
                 ?.bufferedReader()?.use { reader -> reader.readText() }.orEmpty()
@@ -144,4 +161,9 @@ class GitHubDiffRepository : DiffRepository {
         private fun hasValidRepositoryParts(parts: List<String>): Boolean =
             parts.size == 2 && parts.all { part -> REPOSITORY_PART_PATTERN.matches(part) }
     }
+}
+
+internal fun githubAuthorizationHeaderValue(token: String): String? {
+    val trimmedToken = token.trim()
+    return if (trimmedToken.isEmpty()) null else "Bearer $trimmedToken"
 }

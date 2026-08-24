@@ -3,7 +3,7 @@
 ## Purpose
 
 Diff Viewer is an Android application for reviewing Git working-tree changes made in Termux, including changes
-made by Codex, and commit changes obtained directly from public GitHub repositories.
+made by Codex, and commit changes obtained directly from public or authorized private GitHub repositories.
 
 The Termux terminal can display `git diff`, but a large diff eventually exceeds the useful terminal scrollback.
 This application provides a persistent, touch-friendly view in which the complete diff remains available for
@@ -50,8 +50,10 @@ The repository screen offers two read-only data sources:
 
 - **Termux:** connects to the localhost helper and displays the working tree, latest commit, and first-parent
   commit history.
-- **GitHub:** accepts a public `https://github.com/owner/repository` URL and reads the default branch's commits
-  directly through the GitHub REST API. It requires neither the Termux helper nor a token in the initial version.
+- **GitHub:** accepts a `https://github.com/owner/repository` URL and reads the default branch's commits directly
+  through the GitHub REST API. Public repositories work without a token. Private repositories require a
+  fine-grained personal access token that is authorized for that repository with read-only **Metadata** and
+  **Contents** permissions.
 
 The selected source and both sources' connection values are stored in private application preferences. Switching
 sources does not discard the other source's saved values. GitHub mode cannot display uncommitted working-tree
@@ -60,9 +62,15 @@ changes because those changes do not exist on GitHub; its available views are th
 GitHub commit summaries and changed files are requested in pages and combined without silently truncating a
 multi-page commit. When GitHub omits a file's `patch` field, including unsupported, binary, or oversized content,
 the application keeps the file visible and explicitly reports that its line diff was unavailable. GitHub mode is
-unauthenticated and therefore remains subject to GitHub's public API limit of 60 requests per hour per originating
-IP address. A commit that reaches GitHub's 3,000-changed-file response limit is rejected with an explicit error
-rather than shown as a complete diff. Private-repository authentication is intentionally deferred.
+unauthenticated when its token field is empty and therefore remains subject to GitHub's public API limit of 60
+requests per hour per originating IP address. When a token is supplied, every GitHub request uses a bearer
+authorization header. A commit that reaches GitHub's 3,000-changed-file response limit is rejected with an explicit
+error rather than shown as a complete diff.
+
+The GitHub token is encrypted with an application-specific AES-GCM key held by Android Keystore before its
+ciphertext is placed in private application preferences. Plaintext tokens must not be written to Git, logs,
+saved-instance state, GitHub Actions, or Slack. If the Keystore key and ciphertext no longer match, the application
+discards the unreadable saved token instead of exposing or repeatedly reusing it.
 
 ### Local interface
 
@@ -161,7 +169,7 @@ The first useful version will target this repository and provide:
 15. A paged commit-history selector that loads 20 summaries at a time and displays any selected commit against its
     first parent, including the repository's initial commit against an empty tree.
 16. A saved Termux/GitHub source switch that can show the default branch's latest commit and paged commit history
-    for a public GitHub repository without starting the Termux helper.
+    for a public or authorized private GitHub repository without starting the Termux helper.
 
 Untracked files must be represented explicitly. Plain `git diff` does not include their contents, so the Termux
 helper must handle them separately rather than making them silently disappear.
@@ -213,7 +221,6 @@ be classified perfectly. Highlighting must never alter or hide the source text r
 - Applying or reverting patches.
 - Merge-conflict resolution.
 - GitHub pull-request review.
-- Private GitHub repository authentication.
 - Remote access to the Termux helper.
 - Release signing or distribution through an app store.
 

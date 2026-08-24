@@ -52,7 +52,10 @@ class RepositoryViewModelAdapter(
             is RepositoryEvent.Refresh -> appStore.refreshRepositoryDiff(
                 ConnectionSettings(endpoint = event.endpoint, token = event.token)
             )
-            is RepositoryEvent.RefreshGitHub -> appStore.refreshGitHubRepositoryDiff(event.repositoryUrl)
+            is RepositoryEvent.RefreshGitHub -> appStore.refreshGitHubRepositoryDiff(
+                githubRepositoryUrl = event.repositoryUrl,
+                githubToken = event.token,
+            )
             is RepositoryEvent.OpenFile -> findFileDiffSelectionTarget(event.fileId)?.let(openFile)
             is RepositoryEvent.SelectCommit -> appStore.selectCommit(event.commitId)
             RepositoryEvent.LoadMoreCommits -> appStore.loadMoreCommitHistory()
@@ -144,6 +147,7 @@ private fun mapRepositoryUiState(
         endpoint = appState.connectionSettings.endpoint,
         token = appState.connectionSettings.token,
         githubRepositoryUrl = appState.connectionSettings.githubRepositoryUrl,
+        githubToken = appState.connectionSettings.githubToken,
         repositoryConnectionSource = appState.connectionSettings.repositorySource.toUiSource(),
         repositoryName = repositoryDiff?.repository?.substringAfterLast('/'),
         repositoryPath = repositoryDiff?.repository,
