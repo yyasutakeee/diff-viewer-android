@@ -2,13 +2,15 @@ package com.example.diffviewer
 
 import com.example.diffviewer.core.domain.AppState
 import com.example.diffviewer.core.domain.AppStore
+import com.example.diffviewer.core.domain.CommitDiff
 import com.example.diffviewer.core.domain.ConnectionSettings
 import com.example.diffviewer.core.domain.DiffSectionKind
 import com.example.diffviewer.core.domain.FileDiff
 import com.example.diffviewer.core.domain.FileDiffStatus
 import com.example.diffviewer.feature.repository.DiffSectionUiItem
 import com.example.diffviewer.feature.repository.FileDiffUiItem
-import com.example.diffviewer.feature.repository.LatestCommitUiItem
+import com.example.diffviewer.feature.repository.CommitDiffUiItem
+import com.example.diffviewer.feature.repository.CommitHistoryUiItem
 import com.example.diffviewer.feature.repository.RepositoryEvent
 import com.example.diffviewer.feature.repository.RepositoryDiffSource
 import com.example.diffviewer.feature.repository.RepositoryUiState
@@ -49,6 +51,8 @@ class RepositoryViewModelAdapter(
                 ConnectionSettings(endpoint = event.endpoint, token = event.token)
             )
             is RepositoryEvent.OpenFile -> findFileDiffSelectionTarget(event.fileId)?.let(openFile)
+            is RepositoryEvent.SelectCommit -> appStore.selectCommit(event.commitId)
+            RepositoryEvent.LoadMoreCommits -> appStore.loadMoreCommitHistory()
             is RepositoryEvent.OpenAllDiffs -> {
                 findAllDiffsSelectionTarget(event.repositoryDiffSource)?.let(openAllDiffs)
             }
@@ -105,12 +109,30 @@ private fun mapRepositoryUiState(
         )
     }
     val latestCommitUiItem = repositoryDiff?.latestCommit?.let { latestCommit ->
-        LatestCommitUiItem(
+        CommitDiffUiItem(
             id = latestCommit.id,
             subject = latestCommit.subject,
+            authorName = latestCommit.authorName,
+            authoredAt = latestCommit.authoredAt,
             fileItems = latestCommit.fileDiffItems.mapIndexed { index, fileDiff ->
                 val fileId = "latest:$index:${fileDiff.path.orEmpty()}"
                 fileDiffSelectionTargetsById[fileId] = FileDiffSelectionTarget("最新コミット", fileDiff)
+                fileDiff.toUiItem(fileId)
+            },
+        )
+    }
+    val selectedCommitUiItem = appState.selectedCommitDiff?.let { selectedCommitDiff ->
+        CommitDiffUiItem(
+            id = selectedCommitDiff.id,
+            subject = selectedCommitDiff.subject,
+            authorName = selectedCommitDiff.authorName,
+            authoredAt = selectedCommitDiff.authoredAt,
+            fileItems = selectedCommitDiff.fileDiffItems.mapIndexed { index, fileDiff ->
+                val fileId = "commit:${selectedCommitDiff.id}:$index:${fileDiff.path.orEmpty()}"
+                fileDiffSelectionTargetsById[fileId] = FileDiffSelectionTarget(
+                    sourceLabel = selectedCommitDiff.subject,
+                    fileDiff = fileDiff,
+                )
                 fileDiff.toUiItem(fileId)
             },
         )
@@ -124,9 +146,23 @@ private fun mapRepositoryUiState(
             "${it.branch} ・ ${it.changedFileCount}ファイル変更"
         },
         latestCommit = latestCommitUiItem,
+        commitHistoryItems = appState.commitSummaryItems.map { commitSummary ->
+            CommitHistoryUiItem(
+                id = commitSummary.id,
+                subject = commitSummary.subject,
+                authorName = commitSummary.authorName,
+                authoredAt = commitSummary.authoredAt,
+                isSelected = commitSummary.id == appState.selectedCommitId,
+            )
+        },
+        selectedCommit = selectedCommitUiItem,
         workingTreeSectionItems = sectionUiItems,
         isLoading = appState.isLoadingRepositoryDiff,
+        isLoadingCommitHistory = appState.isLoadingCommitHistory,
+        isLoadingSelectedCommit = appState.isLoadingSelectedCommit,
+        hasMoreCommits = appState.nextCommitHistoryOffset != null,
         errorMessage = appState.repositoryDiffErrorMessage,
+        commitHistoryErrorMessage = appState.commitHistoryErrorMessage,
     )
     val allDiffsSelectionTargetsBySource = buildAllDiffsSelectionTargets(appState)
     return RepositoryUiMapping(
@@ -155,13 +191,33 @@ private fun buildAllDiffsSelectionTargets(
         fileDiffItems = repositoryDiff.latestCommit.fileDiffItems,
     )
     return mapOf(
-        RepositoryDiffSource.WORKING_TREE to AllDiffsSelectionTarget(
+        RepositoryDiffSource.WorkingTree to AllDiffsSelectionTarget(
             title = "未コミットのすべての差分",
             groupSelectionTargets = workingTreeGroupSelectionTargets,
         ),
-        RepositoryDiffSource.LATEST_COMMIT to AllDiffsSelectionTarget(
+        RepositoryDiffSource.LatestCommit to AllDiffsSelectionTarget(
             title = "最新コミットのすべての差分",
             groupSelectionTargets = listOf(latestCommitGroupSelectionTarget),
+        ),
+    ).toMutableMap().apply {
+        appState.selectedCommitDiff?.let { selectedCommitDiff ->
+            put(
+                RepositoryDiffSource.Commit(selectedCommitDiff.id),
+                selectedCommitDiff.toAllDiffsSelectionTarget(),
+            )
+        }
+    }
+}
+
+private fun CommitDiff.toAllDiffsSelectionTarget(): AllDiffsSelectionTarget {
+    return AllDiffsSelectionTarget(
+        title = "$subject のすべての差分",
+        groupSelectionTargets = listOf(
+            DiffFileGroupSelectionTarget(
+                id = "commit:$id",
+                title = subject,
+                fileDiffItems = fileDiffItems,
+            )
         ),
     )
 }

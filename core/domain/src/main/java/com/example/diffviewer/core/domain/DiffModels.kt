@@ -3,17 +3,32 @@ package com.example.diffviewer.core.domain
 data class RepositoryDiff(
     val repository: String,
     val branch: String,
-    val latestCommit: LatestCommit,
+    val latestCommit: CommitDiff,
+    val commitHistoryPage: CommitHistoryPage,
     val sections: List<DiffSection>,
 ) {
     val changedFileCount: Int
         get() = sections.sumOf { diffSection -> diffSection.fileDiffItems.size }
 }
 
-data class LatestCommit(
+data class CommitDiff(
     val id: String,
     val subject: String,
+    val authorName: String,
+    val authoredAt: String,
     val fileDiffItems: List<FileDiff>,
+)
+
+data class CommitHistoryPage(
+    val commitSummaryItems: List<CommitSummary>,
+    val nextOffset: Int?,
+)
+
+data class CommitSummary(
+    val id: String,
+    val subject: String,
+    val authorName: String,
+    val authoredAt: String,
 )
 
 data class DiffSection(

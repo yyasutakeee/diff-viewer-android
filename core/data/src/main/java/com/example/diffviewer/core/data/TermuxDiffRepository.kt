@@ -1,5 +1,7 @@
 package com.example.diffviewer.core.data
 
+import com.example.diffviewer.core.domain.CommitDiff
+import com.example.diffviewer.core.domain.CommitHistoryPage
 import com.example.diffviewer.core.domain.DiffRepository
 import com.example.diffviewer.core.domain.RepositoryDiff
 import java.io.IOException
@@ -12,12 +14,34 @@ import org.json.JSONObject
 class TermuxDiffRepository : DiffRepository {
     override suspend fun fetchRepositoryDiff(endpoint: String, token: String): RepositoryDiff {
         return withContext(Dispatchers.IO) {
-            fetchRepositoryDiffOnIoDispatcher(endpoint, token)
+            parseRepositoryDiff(fetchResponseText(endpoint, token, "/api/v1/diff"))
         }
     }
 
-    private fun fetchRepositoryDiffOnIoDispatcher(endpoint: String, token: String): RepositoryDiff {
-        val requestUrl = URL("${endpoint.trimEnd('/')}/api/v1/diff")
+    override suspend fun fetchCommitHistoryPage(
+        endpoint: String,
+        token: String,
+        offset: Int,
+    ): CommitHistoryPage {
+        require(offset >= 0)
+        return withContext(Dispatchers.IO) {
+            parseCommitHistoryPage(fetchResponseText(endpoint, token, "/api/v1/commits?offset=$offset"))
+        }
+    }
+
+    override suspend fun fetchCommitDiff(
+        endpoint: String,
+        token: String,
+        commitId: String,
+    ): CommitDiff {
+        require(COMMIT_ID_PATTERN.matches(commitId))
+        return withContext(Dispatchers.IO) {
+            parseCommitDiff(fetchResponseText(endpoint, token, "/api/v1/commits/$commitId/diff"))
+        }
+    }
+
+    private fun fetchResponseText(endpoint: String, token: String, requestPath: String): String {
+        val requestUrl = URL("${endpoint.trimEnd('/')}$requestPath")
         if (requestUrl.protocol != "http" || requestUrl.host !in ALLOWED_HOSTS) {
             throw IOException("ヘルパーURLには127.0.0.1またはlocalhostだけを指定できます")
         }
@@ -41,7 +65,7 @@ class TermuxDiffRepository : DiffRepository {
                 }.getOrDefault("")
                 throw IOException(serverMessage.ifBlank { "ヘルパーがHTTP $responseCode を返しました" })
             }
-            return parseRepositoryDiff(responseText)
+            return responseText
         } catch (error: IOException) {
             throw IOException("Termuxヘルパーに接続できません: ${error.message}", error)
         } finally {
@@ -53,5 +77,6 @@ class TermuxDiffRepository : DiffRepository {
         const val CONNECT_TIMEOUT_MILLISECONDS = 5_000
         const val READ_TIMEOUT_MILLISECONDS = 15_000
         val ALLOWED_HOSTS = setOf("127.0.0.1", "localhost")
+        val COMMIT_ID_PATTERN = Regex("^[0-9a-fA-F]{40}$")
     }
 }

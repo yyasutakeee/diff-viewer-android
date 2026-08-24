@@ -2,6 +2,16 @@ package com.example.diffviewer.core.domain
 
 interface DiffRepository {
     suspend fun fetchRepositoryDiff(endpoint: String, token: String): RepositoryDiff
+    suspend fun fetchCommitHistoryPage(
+        endpoint: String,
+        token: String,
+        offset: Int,
+    ): CommitHistoryPage
+    suspend fun fetchCommitDiff(
+        endpoint: String,
+        token: String,
+        commitId: String,
+    ): CommitDiff
 }
 
 interface ConnectionSettingsRepository {
