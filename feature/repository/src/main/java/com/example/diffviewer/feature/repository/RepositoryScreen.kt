@@ -26,6 +26,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -44,6 +45,7 @@ fun RepositoryScreen(viewModel: RepositoryViewModel) {
     var endpoint by rememberSaveable { mutableStateOf(repositoryUiState.endpoint) }
     var token by rememberSaveable { mutableStateOf(repositoryUiState.token) }
     var githubRepositoryUrl by rememberSaveable { mutableStateOf(repositoryUiState.githubRepositoryUrl) }
+    var githubToken by remember { mutableStateOf(repositoryUiState.githubToken) }
     var selectedConnectionSource by rememberSaveable {
         mutableStateOf(repositoryUiState.repositoryConnectionSource)
     }
@@ -56,10 +58,12 @@ fun RepositoryScreen(viewModel: RepositoryViewModel) {
         repositoryUiState.endpoint,
         repositoryUiState.token,
         repositoryUiState.githubRepositoryUrl,
+        repositoryUiState.githubToken,
     ) {
         if (endpoint.isEmpty()) endpoint = repositoryUiState.endpoint
         if (token.isEmpty()) token = repositoryUiState.token
         if (githubRepositoryUrl.isEmpty()) githubRepositoryUrl = repositoryUiState.githubRepositoryUrl
+        if (githubToken.isEmpty()) githubToken = repositoryUiState.githubToken
     }
     LaunchedEffect(
         repositoryUiState.workingTreeSectionItems,
@@ -109,10 +113,12 @@ fun RepositoryScreen(viewModel: RepositoryViewModel) {
                 )
                 RepositoryConnectionSource.GITHUB -> GitHubConnectionCard(
                     repositoryUrl = githubRepositoryUrl,
+                    token = githubToken,
                     isLoading = repositoryUiState.isLoading,
                     onRepositoryUrlChange = { githubRepositoryUrl = it },
+                    onTokenChange = { githubToken = it },
                     onRefresh = {
-                        viewModel.send(RepositoryEvent.RefreshGitHub(githubRepositoryUrl))
+                        viewModel.send(RepositoryEvent.RefreshGitHub(githubRepositoryUrl, githubToken))
                     },
                 )
             }
@@ -338,8 +344,10 @@ private fun ConnectionCard(
 @Composable
 private fun GitHubConnectionCard(
     repositoryUrl: String,
+    token: String,
     isLoading: Boolean,
     onRepositoryUrlChange: (String) -> Unit,
+    onTokenChange: (String) -> Unit,
     onRefresh: () -> Unit,
 ) {
     Card(modifier = Modifier.fillMaxWidth()) {
@@ -352,8 +360,18 @@ private fun GitHubConnectionCard(
                 placeholder = { Text("https://github.com/owner/repository") },
                 singleLine = true,
             )
+            OutlinedTextField(
+                value = token,
+                onValueChange = onTokenChange,
+                modifier = Modifier.fillMaxWidth(),
+                label = { Text("GitHub Personal Access Token") },
+                supportingText = { Text("公開リポジトリでは空欄可") },
+                singleLine = true,
+                visualTransformation = PasswordVisualTransformation(),
+            )
             Text(
-                "公開リポジトリのコミット履歴を表示します。Termuxサーバーは不要です。",
+                "公開またはアクセスを許可したプライベートリポジトリを表示します。" +
+                    "Termuxサーバーは不要です。",
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 style = MaterialTheme.typography.bodySmall,
             )

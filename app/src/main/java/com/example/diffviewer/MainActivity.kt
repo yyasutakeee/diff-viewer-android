@@ -5,6 +5,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.lifecycle.lifecycleScope
+import com.example.diffviewer.core.data.AndroidKeystoreSecretCipher
 import com.example.diffviewer.core.data.GitHubDiffRepository
 import com.example.diffviewer.core.data.SharedPreferencesConnectionSettingsRepository
 import com.example.diffviewer.core.data.TermuxDiffRepository
@@ -16,7 +17,10 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
 
         val sharedPreferences = getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE)
-        val connectionSettingsRepository = SharedPreferencesConnectionSettingsRepository(sharedPreferences)
+        val connectionSettingsRepository = SharedPreferencesConnectionSettingsRepository(
+            sharedPreferences = sharedPreferences,
+            secretCipher = AndroidKeystoreSecretCipher(),
+        )
         val diffDisplaySettingsStore = DiffDisplaySettingsStore(sharedPreferences)
         val appStore = AppStore(
             diffRepository = TermuxDiffRepository(),

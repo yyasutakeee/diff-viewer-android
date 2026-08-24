@@ -9,7 +9,7 @@ interface RepositoryViewModel {
 
 sealed interface RepositoryEvent {
     data class Refresh(val endpoint: String, val token: String) : RepositoryEvent
-    data class RefreshGitHub(val repositoryUrl: String) : RepositoryEvent
+    data class RefreshGitHub(val repositoryUrl: String, val token: String) : RepositoryEvent
     data class OpenFile(val fileId: String) : RepositoryEvent
     data class SelectCommit(val commitId: String) : RepositoryEvent
     data object LoadMoreCommits : RepositoryEvent
@@ -31,6 +31,7 @@ data class RepositoryUiState(
     val endpoint: String = "",
     val token: String = "",
     val githubRepositoryUrl: String = "",
+    val githubToken: String = "",
     val repositoryConnectionSource: RepositoryConnectionSource = RepositoryConnectionSource.TERMUX,
     val repositoryName: String? = null,
     val repositoryPath: String? = null,

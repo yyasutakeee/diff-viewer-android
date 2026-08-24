@@ -89,7 +89,7 @@ class AppStore(
         }
     }
 
-    fun refreshGitHubRepositoryDiff(githubRepositoryUrl: String) {
+    fun refreshGitHubRepositoryDiff(githubRepositoryUrl: String, githubToken: String) {
         if (mutableState.value.isLoadingRepositoryDiff) return
         if (githubRepositoryUrl.isBlank()) {
             mutableState.value = mutableState.value.copy(
@@ -97,11 +97,21 @@ class AppStore(
             )
             return
         }
+        val normalizedGitHubToken = githubToken.trim()
         val githubConnectionSettings = mutableState.value.connectionSettings.copy(
             githubRepositoryUrl = githubRepositoryUrl,
+            githubToken = normalizedGitHubToken,
             repositorySource = RepositorySource.GITHUB,
         )
-        connectionSettingsRepository.saveConnectionSettings(githubConnectionSettings)
+        val saveConnectionSettingsResult = runCatching {
+            connectionSettingsRepository.saveConnectionSettings(githubConnectionSettings)
+        }
+        if (saveConnectionSettingsResult.isFailure) {
+            mutableState.value = mutableState.value.copy(
+                repositoryDiffErrorMessage = "GitHubトークンを安全に保存できませんでした",
+            )
+            return
+        }
         mutableState.value = mutableState.value.copy(
             connectionSettings = githubConnectionSettings,
             repositoryDiff = null,
@@ -116,7 +126,7 @@ class AppStore(
         )
         coroutineScope.launch {
             runCatching {
-                githubDiffRepository.fetchRepositoryDiff(githubRepositoryUrl, "")
+                githubDiffRepository.fetchRepositoryDiff(githubRepositoryUrl, normalizedGitHubToken)
             }.onSuccess(::applyRepositoryDiff)
                 .onFailure(::applyRepositoryDiffFailure)
         }
@@ -140,7 +150,7 @@ class AppStore(
                     )
                     RepositorySource.GITHUB -> githubDiffRepository.fetchCommitHistoryPage(
                         endpoint = currentState.connectionSettings.githubRepositoryUrl,
-                        token = "",
+                        token = currentState.connectionSettings.githubToken,
                         offset = nextOffset,
                     )
                 }
@@ -183,7 +193,7 @@ class AppStore(
                     )
                     RepositorySource.GITHUB -> githubDiffRepository.fetchCommitDiff(
                         endpoint = currentState.connectionSettings.githubRepositoryUrl,
-                        token = "",
+                        token = currentState.connectionSettings.githubToken,
                         commitId = commitId,
                     )
                 }
