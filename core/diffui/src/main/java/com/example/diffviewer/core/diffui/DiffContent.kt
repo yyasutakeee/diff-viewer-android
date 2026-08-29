@@ -69,7 +69,7 @@ fun LazyListScope.diffFileContent(
     colorPalette: DiffColorPalette,
     showFileHeader: Boolean,
 ) {
-    val isKotlinSource = isKotlinSourcePath(diffFileDisplay.path)
+    val syntaxLanguage = syntaxLanguageForPath(diffFileDisplay.path)
     if (showFileHeader) {
         item(key = "file:${diffFileDisplay.id}") {
             Text(
@@ -122,7 +122,7 @@ fun LazyListScope.diffFileContent(
                     diffLineDisplay = diffLineDisplay,
                     fontSizeSp = fontSizeSp,
                     colorPalette = colorPalette,
-                    isKotlinSource = isKotlinSource,
+                    syntaxLanguage = syntaxLanguage,
                 )
             }
         }
@@ -144,7 +144,7 @@ private fun DiffLineRow(
     diffLineDisplay: DiffLineDisplay,
     fontSizeSp: Int,
     colorPalette: DiffColorPalette,
-    isKotlinSource: Boolean,
+    syntaxLanguage: SyntaxLanguage?,
 ) {
     val backgroundColor = when (diffLineDisplay.kind) {
         DiffLineDisplayKind.ADDITION -> Color(colorPalette.additionBackgroundArgb)
@@ -170,7 +170,7 @@ private fun DiffLineRow(
     val highlightedText = rememberSyntaxHighlightedText(
         prefix = prefix,
         sourceLine = diffLineDisplay.content,
-        isKotlinSource = isKotlinSource && diffLineDisplay.kind != DiffLineDisplayKind.META,
+        syntaxLanguage = syntaxLanguage.takeUnless { diffLineDisplay.kind == DiffLineDisplayKind.META },
         baseTextColor = textColor,
         backgroundColor = effectiveBackgroundColor,
     )

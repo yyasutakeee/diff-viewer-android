@@ -1,0 +1,97 @@
+#!/usr/bin/env python3
+"""Launch the Diff Viewer helper for a Git repository with one command."""
+
+from __future__ import annotations
+
+import argparse
+import os
+from pathlib import Path
+import secrets
+import subprocess
+import sys
+
+
+TOKEN_DIRECTORY_NAME = "diff-viewer"
+TOKEN_FILE_NAME = "token"
+
+
+def parse_arguments() -> argparse.Namespace:
+    argument_parser = argparse.ArgumentParser(description=__doc__)
+    argument_parser.add_argument(
+        "repository",
+        nargs="?",
+        type=Path,
+        default=Path.cwd(),
+        help="Repository or a directory inside it; defaults to the current directory",
+    )
+    return argument_parser.parse_args()
+
+
+def find_repository_root(repository: Path) -> Path:
+    completed_process = subprocess.run(
+        ["git", "-C", str(repository), "rev-parse", "--show-toplevel"],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if completed_process.returncode != 0:
+        raise RuntimeError(
+            completed_process.stderr.strip() or "Gitリポジトリを特定できませんでした"
+        )
+    return Path(completed_process.stdout.strip()).resolve(strict=True)
+
+
+def find_token_file() -> Path:
+    configured_directory = os.environ.get("XDG_CONFIG_HOME")
+    base_directory = Path(configured_directory) if configured_directory else Path.home() / ".config"
+    return base_directory / TOKEN_DIRECTORY_NAME / TOKEN_FILE_NAME
+
+
+def load_or_create_token(token_file: Path) -> tuple[str, bool]:
+    if token_file.exists():
+        token = token_file.read_text(encoding="utf-8").strip()
+        if not token:
+            raise RuntimeError(f"保存済みトークンが空です: {token_file}")
+        return token, False
+
+    token_file.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+    token_file.parent.chmod(0o700)
+    token = secrets.token_urlsafe(32)
+    file_descriptor = os.open(
+        token_file,
+        os.O_WRONLY | os.O_CREAT | os.O_EXCL,
+        0o600,
+    )
+    with os.fdopen(file_descriptor, "w", encoding="utf-8") as token_stream:
+        token_stream.write(f"{token}\n")
+    return token, True
+
+
+def main() -> None:
+    arguments = parse_arguments()
+    try:
+        repository_root = find_repository_root(arguments.repository)
+        token_file = find_token_file()
+        token, was_created = load_or_create_token(token_file)
+    except (OSError, RuntimeError) as error:
+        raise SystemExit(str(error)) from error
+
+    if was_created:
+        print("初回用のTermuxアクセストークンを作成しました。")
+        print(f"アプリのTermux欄へ一度だけ入力してください: {token}")
+        print(f"保存先: {token_file}")
+    print(f"Diff Viewer対象: {repository_root}")
+    sys.stdout.flush()
+
+    server_path = Path(__file__).resolve().parent / "server.py"
+    environment = os.environ.copy()
+    environment["DIFF_VIEWER_TOKEN"] = token
+    os.execve(
+        sys.executable,
+        [sys.executable, str(server_path), "--repository", str(repository_root)],
+        environment,
+    )
+
+
+if __name__ == "__main__":
+    main()
