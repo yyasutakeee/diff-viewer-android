@@ -143,14 +143,32 @@ older APK once, install the fixed-signature build, and then install subsequent b
 
 ### Starting the helper
 
-From this repository in Termux, choose a private token and run:
+Install the repository-owned command wrapper once into Termux's private executable path. A wrapper is required
+because Android does not execute files directly from shared storage:
 
 ```sh
-DIFF_VIEWER_TOKEN='replace-with-a-private-token' python termux-helper/server.py \
-  --repository /storage/emulated/0/Projects/diff-viewer-android
+cp /storage/emulated/0/Projects/diff-viewer-android/termux-helper/diff-viewer-command \
+  /data/data/com.termux/files/usr/bin/diff-viewer
+chmod 755 /data/data/com.termux/files/usr/bin/diff-viewer
 ```
 
-Enter the same token in the Android application, keep the default helper URL, and select **変更を更新**.
+Then change to any Git repository and start the helper with one command:
+
+```sh
+diff-viewer
+```
+
+The launcher resolves the current repository root, creates a shared random token on first use, stores it with
+owner-only permissions at `~/.config/diff-viewer/token`, and starts the localhost helper. Enter the displayed token
+in the Android application's Termux connection once. Later launches reuse it. A repository may also be selected
+without changing directories:
+
+```sh
+diff-viewer /storage/emulated/0/Projects/another-project
+```
+
+Stop the helper with **Ctrl+C**. The launcher, token file, and global command must never modify the selected Git
+repository.
 
 ## Initial version
 
@@ -166,8 +184,9 @@ The first useful version will target this repository and provide:
 8. A shared 8–24sp font-size control for single-file and all-files diff views.
 9. Shared, persistent addition/deletion background and text colors with standard, deep, blue, dark, and
    high-contrast presets plus validated custom ARGB hexadecimal values.
-10. Lightweight Kotlin syntax highlighting for `.kt` and `.kts` diff lines, including keywords, strings,
-    characters, comments, numbers, and annotations.
+10. Lightweight Kotlin and Swift syntax highlighting for `.kt`, `.kts`, and `.swift` diff lines, including
+    keywords, strings, comments, numbers, and annotations or attributes. Kotlin character literals are also
+    highlighted.
 11. Manual refresh after Termux or Codex changes files.
 12. Clear empty, loading, helper-unavailable, and Git-error states.
 13. A switch between uncommitted changes and the latest commit.
@@ -212,14 +231,14 @@ The Android application must:
 - Apply the current session's diff font size consistently to single-file and all-files views.
 - Apply one persisted diff color palette to both diff views. Preserve `+` and `-` prefixes so color is never the
   only carrier of addition and deletion meaning.
-- Select light or dark Kotlin token colors from the effective row background so custom diff palettes remain
+- Select light or dark syntax token colors from the effective row background so custom diff palettes remain
   readable. Cache tokenization per visible line rather than reparsing on every recomposition.
 - Never imply that a file is unchanged when its data could not be loaded.
 - Keep a GitHub file visible and show an explicit unavailable-content message whenever the API omits its patch.
 
-Kotlin highlighting is intentionally lexical and line-based. A diff hunk may begin inside a multiline comment or
-triple-quoted string whose opening delimiter is outside the response, so those cross-line constructs cannot always
-be classified perfectly. Highlighting must never alter or hide the source text returned by the helper.
+Kotlin and Swift highlighting is intentionally lexical and line-based. A diff hunk may begin inside a multiline
+comment or multiline string whose opening delimiter is outside the response, so those cross-line constructs cannot
+always be classified perfectly. Highlighting must never alter or hide the source text returned by the helper.
 
 ## Out of scope for the initial version
 

@@ -10,24 +10,31 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import com.example.diffviewer.core.syntaxhighlight.KotlinSyntaxLexer
+import com.example.diffviewer.core.syntaxhighlight.SwiftSyntaxLexer
 import com.example.diffviewer.core.syntaxhighlight.SyntaxToken
 import com.example.diffviewer.core.syntaxhighlight.SyntaxTokenKind
 
 private val kotlinSyntaxLexer = KotlinSyntaxLexer()
+private val swiftSyntaxLexer = SwiftSyntaxLexer()
+
+enum class SyntaxLanguage {
+    KOTLIN,
+    SWIFT,
+}
 
 @Composable
 fun rememberSyntaxHighlightedText(
     prefix: String,
     sourceLine: String,
-    isKotlinSource: Boolean,
+    syntaxLanguage: SyntaxLanguage?,
     baseTextColor: Color,
     backgroundColor: Color,
 ): AnnotatedString {
-    return remember(prefix, sourceLine, isKotlinSource, baseTextColor, backgroundColor) {
+    return remember(prefix, sourceLine, syntaxLanguage, baseTextColor, backgroundColor) {
         createSyntaxHighlightedText(
             prefix = prefix,
             sourceLine = sourceLine,
-            isKotlinSource = isKotlinSource,
+            syntaxLanguage = syntaxLanguage,
             baseTextColor = baseTextColor,
             backgroundColor = backgroundColor,
         )
@@ -37,11 +44,15 @@ fun rememberSyntaxHighlightedText(
 internal fun createSyntaxHighlightedText(
     prefix: String,
     sourceLine: String,
-    isKotlinSource: Boolean,
+    syntaxLanguage: SyntaxLanguage?,
     baseTextColor: Color,
     backgroundColor: Color,
 ): AnnotatedString {
-    val syntaxTokens = if (isKotlinSource) kotlinSyntaxLexer.tokenizeLine(sourceLine) else emptyList()
+    val syntaxTokens = when (syntaxLanguage) {
+        SyntaxLanguage.KOTLIN -> kotlinSyntaxLexer.tokenizeLine(sourceLine)
+        SyntaxLanguage.SWIFT -> swiftSyntaxLexer.tokenizeLine(sourceLine)
+        null -> emptyList()
+    }
     val syntaxColorScheme = createSyntaxColorScheme(backgroundColor)
     return buildAnnotatedString {
         append(prefix)
@@ -61,9 +72,13 @@ internal fun createSyntaxHighlightedText(
     }
 }
 
-fun isKotlinSourcePath(filePath: String): Boolean {
+fun syntaxLanguageForPath(filePath: String): SyntaxLanguage? {
     val lowercaseFilePath = filePath.lowercase()
-    return lowercaseFilePath.endsWith(".kt") || lowercaseFilePath.endsWith(".kts")
+    return when {
+        lowercaseFilePath.endsWith(".kt") || lowercaseFilePath.endsWith(".kts") -> SyntaxLanguage.KOTLIN
+        lowercaseFilePath.endsWith(".swift") -> SyntaxLanguage.SWIFT
+        else -> null
+    }
 }
 
 private data class SyntaxColorScheme(

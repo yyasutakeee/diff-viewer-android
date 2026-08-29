@@ -16,7 +16,7 @@ class SyntaxHighlightedTextTest {
         val highlightedText = createSyntaxHighlightedText(
             prefix = "+",
             sourceLine = sourceLine,
-            isKotlinSource = true,
+            syntaxLanguage = SyntaxLanguage.KOTLIN,
             baseTextColor = Color.Black,
             backgroundColor = Color.White,
         )
@@ -35,11 +35,28 @@ class SyntaxHighlightedTextTest {
     }
 
     @Test
-    fun createsOnlyTheBaseColorSpanForNonKotlinSource() {
+    fun createsDifferentColorSpansForSwiftKeywordAndString() {
+        val sourceLine = "func greeting() -> String { \"Hello\" }"
+
+        val highlightedText = createSyntaxHighlightedText(
+            prefix = "+",
+            sourceLine = sourceLine,
+            syntaxLanguage = SyntaxLanguage.SWIFT,
+            baseTextColor = Color.Black,
+            backgroundColor = Color.White,
+        )
+
+        val keywordStyle = requireNotNull(findSpanStyleForText(highlightedText, "func"))
+        val stringStyle = requireNotNull(findSpanStyleForText(highlightedText, "\"Hello\""))
+        assertNotEquals(keywordStyle.color, stringStyle.color)
+    }
+
+    @Test
+    fun createsOnlyTheBaseColorSpanForUnsupportedSource() {
         val highlightedText = createSyntaxHighlightedText(
             prefix = "+",
             sourceLine = "fun greeting() = \"Hello\"",
-            isKotlinSource = false,
+            syntaxLanguage = null,
             baseTextColor = Color.Black,
             backgroundColor = Color.White,
         )

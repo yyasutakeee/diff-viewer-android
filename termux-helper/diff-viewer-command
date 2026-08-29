@@ -1,0 +1,4 @@
+#!/data/data/com.termux/files/usr/bin/sh
+
+exec /data/data/com.termux/files/usr/bin/python \
+  /storage/emulated/0/Projects/diff-viewer-android/termux-helper/diff-viewer "$@"
