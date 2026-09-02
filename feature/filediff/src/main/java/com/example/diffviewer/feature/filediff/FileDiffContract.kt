@@ -14,6 +14,7 @@ sealed interface FileDiffEvent {
     data object NavigateBack : FileDiffEvent
     data object DecreaseFontSize : FileDiffEvent
     data object IncreaseFontSize : FileDiffEvent
+    data object ToggleLineWrapping : FileDiffEvent
     data class UpdateColorPalette(val diffColorPalette: DiffColorPalette) : FileDiffEvent
 }
 

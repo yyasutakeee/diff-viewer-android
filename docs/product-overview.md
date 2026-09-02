@@ -180,7 +180,8 @@ The first useful version will target this repository and provide:
 4. A selectable file detail view.
 5. A unified line diff with prefixes, line numbers, and red/green styling.
 6. A continuously scrollable view containing every changed file in the selected working-tree or latest-commit source.
-7. Visual line wrapping for source text that exceeds the available screen width without modifying its content.
+7. A persistent toggle for visual line wrapping of source text that exceeds the available screen width, without
+   modifying its content; disabling it permits horizontal scrolling.
 8. A shared 8–24sp font-size control for single-file and all-files diff views.
 9. Shared, persistent addition/deletion background and text colors with standard, deep, blue, dark, and
    high-contrast presets plus validated custom ARGB hexadecimal values.

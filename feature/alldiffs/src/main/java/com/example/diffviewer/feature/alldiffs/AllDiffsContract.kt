@@ -14,6 +14,7 @@ sealed interface AllDiffsEvent {
     data object NavigateBack : AllDiffsEvent
     data object DecreaseFontSize : AllDiffsEvent
     data object IncreaseFontSize : AllDiffsEvent
+    data object ToggleLineWrapping : AllDiffsEvent
     data class UpdateColorPalette(val diffColorPalette: DiffColorPalette) : AllDiffsEvent
 }
 

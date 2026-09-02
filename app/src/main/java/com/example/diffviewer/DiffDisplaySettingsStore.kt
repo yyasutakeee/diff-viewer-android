@@ -11,8 +11,16 @@ class DiffDisplaySettingsStore(
     private val sharedPreferences: SharedPreferences,
 ) {
     private val mutableColorPalette = MutableStateFlow(loadColorPalette())
+    private val mutableLineWrappingEnabled = MutableStateFlow(loadLineWrappingEnabled())
 
     val colorPalette: StateFlow<DiffColorPalette> = mutableColorPalette.asStateFlow()
+    val lineWrappingEnabled: StateFlow<Boolean> = mutableLineWrappingEnabled.asStateFlow()
+
+    fun toggleLineWrapping() {
+        val enabled = !mutableLineWrappingEnabled.value
+        sharedPreferences.edit().putBoolean(LINE_WRAPPING_ENABLED_KEY, enabled).apply()
+        mutableLineWrappingEnabled.value = enabled
+    }
 
     fun updateColorPalette(diffColorPalette: DiffColorPalette) {
         sharedPreferences.edit()
@@ -45,10 +53,15 @@ class DiffDisplaySettingsStore(
         )
     }
 
+    private fun loadLineWrappingEnabled(): Boolean {
+        return sharedPreferences.getBoolean(LINE_WRAPPING_ENABLED_KEY, true)
+    }
+
     private companion object {
         const val ADDITION_BACKGROUND_KEY = "diff_addition_background_argb"
         const val ADDITION_TEXT_KEY = "diff_addition_text_argb"
         const val DELETION_BACKGROUND_KEY = "diff_deletion_background_argb"
         const val DELETION_TEXT_KEY = "diff_deletion_text_argb"
+        const val LINE_WRAPPING_ENABLED_KEY = "diff_line_wrapping_enabled"
     }
 }

@@ -33,6 +33,7 @@ data class DiffDisplayConfiguration(
     val fontSizeSp: Int,
     val canDecreaseFontSize: Boolean,
     val canIncreaseFontSize: Boolean,
+    val isLineWrappingEnabled: Boolean,
     val colorPalette: DiffColorPalette,
 )
 

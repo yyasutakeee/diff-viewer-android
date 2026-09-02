@@ -1,21 +1,25 @@
 package com.example.diffviewer.core.diffui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.Switch
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -31,6 +35,7 @@ fun DiffDisplayControls(
     diffDisplayConfiguration: DiffDisplayConfiguration,
     decreaseFontSize: () -> Unit,
     increaseFontSize: () -> Unit,
+    toggleLineWrapping: () -> Unit,
     updateColorPalette: (DiffColorPalette) -> Unit,
 ) {
     var isColorSettingsVisible by remember { mutableStateOf(false) }
@@ -40,6 +45,10 @@ fun DiffDisplayControls(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text("折り返し表示", modifier = Modifier.weight(1f))
+        Switch(
+            checked = diffDisplayConfiguration.isLineWrappingEnabled,
+            onCheckedChange = { toggleLineWrapping() },
+        )
         Button(onClick = { isColorSettingsVisible = true }) { Text("配色") }
         Button(
             onClick = decreaseFontSize,
@@ -66,6 +75,7 @@ fun DiffDisplayControls(
 fun LazyListScope.diffFileContent(
     diffFileDisplay: DiffFileDisplay,
     fontSizeSp: Int,
+    isLineWrappingEnabled: Boolean,
     colorPalette: DiffColorPalette,
     showFileHeader: Boolean,
 ) {
@@ -121,6 +131,7 @@ fun LazyListScope.diffFileContent(
                 DiffLineRow(
                     diffLineDisplay = diffLineDisplay,
                     fontSizeSp = fontSizeSp,
+                    isLineWrappingEnabled = isLineWrappingEnabled,
                     colorPalette = colorPalette,
                     syntaxLanguage = syntaxLanguage,
                 )
@@ -143,6 +154,7 @@ private fun DiffEmptyMessage(message: String) {
 private fun DiffLineRow(
     diffLineDisplay: DiffLineDisplay,
     fontSizeSp: Int,
+    isLineWrappingEnabled: Boolean,
     colorPalette: DiffColorPalette,
     syntaxLanguage: SyntaxLanguage?,
 ) {
@@ -177,6 +189,7 @@ private fun DiffLineRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .horizontalScroll(rememberScrollState())
             .background(backgroundColor)
             .padding(vertical = 1.dp),
         verticalAlignment = Alignment.Top,
@@ -185,12 +198,16 @@ private fun DiffLineRow(
         DiffLineNumber(diffLineDisplay.newLine, fontSizeSp)
         Text(
             text = highlightedText,
-            modifier = Modifier.weight(1f),
+            modifier = if (isLineWrappingEnabled) {
+                Modifier.weight(1f)
+            } else {
+                Modifier.wrapContentWidth()
+            },
             color = Color.Unspecified,
             fontFamily = FontFamily.Monospace,
             fontSize = fontSizeSp.sp,
             lineHeight = (fontSizeSp + 2).sp,
-            softWrap = true,
+            softWrap = isLineWrappingEnabled,
             style = TextStyle(
                 platformStyle = PlatformTextStyle(includeFontPadding = false),
             ),

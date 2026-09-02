@@ -32,6 +32,7 @@ fun AllDiffsScreen(viewModel: AllDiffsViewModel) {
             diffDisplayConfiguration = allDiffsUiState.diffDisplayConfiguration,
             decreaseFontSize = { viewModel.send(AllDiffsEvent.DecreaseFontSize) },
             increaseFontSize = { viewModel.send(AllDiffsEvent.IncreaseFontSize) },
+            toggleLineWrapping = { viewModel.send(AllDiffsEvent.ToggleLineWrapping) },
             updateColorPalette = { diffColorPalette ->
                 viewModel.send(AllDiffsEvent.UpdateColorPalette(diffColorPalette))
             },
@@ -53,6 +54,7 @@ fun AllDiffsScreen(viewModel: AllDiffsViewModel) {
                     diffFileContent(
                         diffFileDisplay = diffFileDisplay,
                         fontSizeSp = allDiffsUiState.diffDisplayConfiguration.fontSizeSp,
+                        isLineWrappingEnabled = allDiffsUiState.diffDisplayConfiguration.isLineWrappingEnabled,
                         colorPalette = allDiffsUiState.diffDisplayConfiguration.colorPalette,
                         showFileHeader = true,
                     )

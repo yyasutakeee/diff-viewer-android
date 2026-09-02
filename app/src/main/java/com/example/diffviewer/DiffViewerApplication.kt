@@ -26,6 +26,7 @@ fun DiffViewerApplication(
     }
     var diffFontSizeSp by rememberSaveable { mutableIntStateOf(DEFAULT_DIFF_FONT_SIZE_SP) }
     val diffColorPalette by diffDisplaySettingsStore.colorPalette.collectAsState()
+    val isLineWrappingEnabled by diffDisplaySettingsStore.lineWrappingEnabled.collectAsState()
     val repositoryViewModelAdapter = remember(appStore, coroutineScope) {
         RepositoryViewModelAdapter(
             appStore = appStore,
@@ -53,14 +54,17 @@ fun DiffViewerApplication(
                     currentDestination,
                     diffFontSizeSp,
                     diffColorPalette,
+                    isLineWrappingEnabled,
                 ) {
                     FileDiffViewModelAdapter(
                         fileDiffSelectionTarget = currentDestination.fileDiffSelectionTarget,
                         fontSizeSp = diffFontSizeSp,
                         diffColorPalette = diffColorPalette,
+                        isLineWrappingEnabled = isLineWrappingEnabled,
                         navigateBack = { diffViewerDestination = DiffViewerDestination.Repository },
                         decreaseFontSize = decreaseFontSize,
                         increaseFontSize = increaseFontSize,
+                        toggleLineWrapping = diffDisplaySettingsStore::toggleLineWrapping,
                         updateColorPalette = diffDisplaySettingsStore::updateColorPalette,
                     )
                 }
@@ -71,14 +75,17 @@ fun DiffViewerApplication(
                     currentDestination,
                     diffFontSizeSp,
                     diffColorPalette,
+                    isLineWrappingEnabled,
                 ) {
                     AllDiffsViewModelAdapter(
                         allDiffsSelectionTarget = currentDestination.allDiffsSelectionTarget,
                         fontSizeSp = diffFontSizeSp,
                         diffColorPalette = diffColorPalette,
+                        isLineWrappingEnabled = isLineWrappingEnabled,
                         navigateBack = { diffViewerDestination = DiffViewerDestination.Repository },
                         decreaseFontSize = decreaseFontSize,
                         increaseFontSize = increaseFontSize,
+                        toggleLineWrapping = diffDisplaySettingsStore::toggleLineWrapping,
                         updateColorPalette = diffDisplaySettingsStore::updateColorPalette,
                     )
                 }

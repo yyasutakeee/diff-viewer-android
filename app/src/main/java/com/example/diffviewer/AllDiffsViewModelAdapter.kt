@@ -13,9 +13,11 @@ class AllDiffsViewModelAdapter(
     allDiffsSelectionTarget: AllDiffsSelectionTarget,
     fontSizeSp: Int,
     diffColorPalette: DiffColorPalette,
+    isLineWrappingEnabled: Boolean,
     private val navigateBack: () -> Unit,
     private val decreaseFontSize: () -> Unit,
     private val increaseFontSize: () -> Unit,
+    private val toggleLineWrapping: () -> Unit,
     private val updateColorPalette: (DiffColorPalette) -> Unit,
 ) : AllDiffsViewModel {
     private val mutableState = MutableStateFlow(
@@ -32,6 +34,7 @@ class AllDiffsViewModelAdapter(
             },
             diffDisplayConfiguration = createDiffDisplayConfiguration(
                 fontSizeSp = fontSizeSp,
+                isLineWrappingEnabled = isLineWrappingEnabled,
                 diffColorPalette = diffColorPalette,
             ),
         )
@@ -44,6 +47,7 @@ class AllDiffsViewModelAdapter(
             AllDiffsEvent.NavigateBack -> navigateBack()
             AllDiffsEvent.DecreaseFontSize -> decreaseFontSize()
             AllDiffsEvent.IncreaseFontSize -> increaseFontSize()
+            AllDiffsEvent.ToggleLineWrapping -> toggleLineWrapping()
             is AllDiffsEvent.UpdateColorPalette -> updateColorPalette(event.diffColorPalette)
         }
     }

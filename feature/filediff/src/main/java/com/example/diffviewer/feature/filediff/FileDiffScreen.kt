@@ -49,6 +49,7 @@ fun FileDiffScreen(viewModel: FileDiffViewModel) {
             diffDisplayConfiguration = fileDiffUiState.diffDisplayConfiguration,
             decreaseFontSize = { viewModel.send(FileDiffEvent.DecreaseFontSize) },
             increaseFontSize = { viewModel.send(FileDiffEvent.IncreaseFontSize) },
+            toggleLineWrapping = { viewModel.send(FileDiffEvent.ToggleLineWrapping) },
             updateColorPalette = { diffColorPalette ->
                 viewModel.send(FileDiffEvent.UpdateColorPalette(diffColorPalette))
             },
@@ -58,6 +59,7 @@ fun FileDiffScreen(viewModel: FileDiffViewModel) {
             diffFileContent(
                 diffFileDisplay = fileDiffUiState.diffFileDisplay,
                 fontSizeSp = fileDiffUiState.diffDisplayConfiguration.fontSizeSp,
+                isLineWrappingEnabled = fileDiffUiState.diffDisplayConfiguration.isLineWrappingEnabled,
                 colorPalette = fileDiffUiState.diffDisplayConfiguration.colorPalette,
                 showFileHeader = false,
             )
