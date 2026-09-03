@@ -18,6 +18,7 @@ import java.io.IOException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.eclipse.jgit.api.Git
+import org.eclipse.jgit.errors.MissingObjectException
 import org.eclipse.jgit.diff.DiffEntry
 import org.eclipse.jgit.diff.DiffFormatter
 import org.eclipse.jgit.diff.RawText
@@ -297,7 +298,8 @@ class LocalGitDiffRepository(
     )
 
     private fun createCommitDiff(repository: Repository, commit: RevCommit): CommitDiff {
-        return RevWalk(repository).use { revWalk ->
+        return try {
+            RevWalk(repository).use { revWalk ->
             val parsedCommit = revWalk.parseCommit(commit.id)
             val firstParent = parsedCommit.parents.firstOrNull()?.let(revWalk::parseCommit)
             val oldTree = firstParent?.let(revWalk::parseTree)
@@ -316,6 +318,15 @@ class LocalGitDiffRepository(
                     fileDiffItems = createFileDiffs(repository, diffEntryItems),
                 )
             }
+            }
+        } catch (_: MissingObjectException) {
+            CommitDiff(
+                id = commit.name,
+                subject = commit.shortMessage,
+                authorName = commit.authorIdent.name,
+                authoredAt = commit.authorIdent.whenAsInstant.toString(),
+                fileDiffItems = emptyList(),
+            )
         }
     }
 
