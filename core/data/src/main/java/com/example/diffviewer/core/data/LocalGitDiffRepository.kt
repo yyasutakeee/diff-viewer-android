@@ -297,26 +297,25 @@ class LocalGitDiffRepository(
     )
 
     private fun createCommitDiff(repository: Repository, commit: RevCommit): CommitDiff {
-        val firstParent = if (commit.parentCount == 0) {
-            null
-        } else {
-            RevWalk(repository).use { revWalk ->
-                revWalk.parseCommit(commit.getParent(0)).also(revWalk::parseTree)
+        return RevWalk(repository).use { revWalk ->
+            val parsedCommit = revWalk.parseCommit(commit.id)
+            val firstParent = parsedCommit.parents.firstOrNull()?.let(revWalk::parseCommit)
+            val oldTree = firstParent?.let(revWalk::parseTree)
+            val newTree = revWalk.parseTree(parsedCommit)
+            repository.newObjectReader().use { objectReader ->
+                val oldTreeIterator = oldTree?.let { tree ->
+                    createTreeIterator(objectReader, tree.id)
+                } ?: EmptyTreeIterator()
+                val newTreeIterator = createTreeIterator(objectReader, newTree.id)
+                val diffEntryItems = scanDiffEntries(repository, oldTreeIterator, newTreeIterator)
+                CommitDiff(
+                    id = parsedCommit.name,
+                    subject = parsedCommit.shortMessage,
+                    authorName = parsedCommit.authorIdent.name,
+                    authoredAt = parsedCommit.authorIdent.whenAsInstant.toString(),
+                    fileDiffItems = createFileDiffs(repository, diffEntryItems),
+                )
             }
-        }
-        return repository.newObjectReader().use { objectReader ->
-            val oldTreeIterator = firstParent?.let { parent ->
-                createTreeIterator(objectReader, parent.tree.id)
-            } ?: EmptyTreeIterator()
-            val newTreeIterator = createTreeIterator(objectReader, commit.tree.id)
-            val diffEntryItems = scanDiffEntries(repository, oldTreeIterator, newTreeIterator)
-            CommitDiff(
-                id = commit.name,
-                subject = commit.shortMessage,
-                authorName = commit.authorIdent.name,
-                authoredAt = commit.authorIdent.whenAsInstant.toString(),
-                fileDiffItems = createFileDiffs(repository, diffEntryItems),
-            )
         }
     }
 
