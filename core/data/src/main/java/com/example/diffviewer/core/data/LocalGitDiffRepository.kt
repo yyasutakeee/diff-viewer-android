@@ -130,15 +130,16 @@ class LocalGitDiffRepository(
         return createFileDiffs(repository, diffEntryItems)
     }
 
-    private fun createStagedDiffs(repository: Repository): List<FileDiff> {
-        val headTreeIterator = repository.resolve(Constants.HEAD + "^{tree}")?.let { treeId ->
-            createTreeIterator(repository, treeId)
-        } ?: EmptyTreeIterator()
-        return createFileDiffs(
-            repository,
-            scanDiffEntries(repository, headTreeIterator, DirCacheIterator(repository.readDirCache())),
-        )
-    }
+    private fun createStagedDiffs(repository: Repository): List<FileDiff> =
+        repository.newObjectReader().use { objectReader ->
+            val headTreeIterator = repository.resolve(Constants.HEAD + "^{tree}")?.let { treeId ->
+                createTreeIterator(objectReader, treeId)
+            } ?: EmptyTreeIterator()
+            createFileDiffs(
+                repository,
+                scanDiffEntries(repository, headTreeIterator, DirCacheIterator(repository.readDirCache())),
+            )
+        }
 
     private fun scanDiffEntries(
         repository: Repository,
@@ -150,10 +151,10 @@ class LocalGitDiffRepository(
         formatter.scan(oldTreeIterator, newTreeIterator)
     }
 
-    private fun createTreeIterator(repository: Repository, treeId: ObjectId): CanonicalTreeParser =
-        repository.newObjectReader().use { objectReader ->
-            CanonicalTreeParser().apply { reset(objectReader, treeId) }
-        }
+    private fun createTreeIterator(
+        objectReader: org.eclipse.jgit.lib.ObjectReader,
+        treeId: ObjectId,
+    ): CanonicalTreeParser = CanonicalTreeParser().apply { reset(objectReader, treeId) }
 
     private fun createFileDiffs(
         repository: Repository,
@@ -292,21 +293,25 @@ class LocalGitDiffRepository(
     )
 
     private fun createCommitDiff(repository: Repository, commit: RevCommit): CommitDiff {
-        val oldTreeIterator = if (commit.parentCount == 0) {
-            EmptyTreeIterator()
+        val firstParent = if (commit.parentCount == 0) {
+            null
         } else {
-            val firstParent = RevWalk(repository).use { revWalk -> revWalk.parseCommit(commit.getParent(0)) }
-            createTreeIterator(repository, firstParent.tree.id)
+            RevWalk(repository).use { revWalk -> revWalk.parseCommit(commit.getParent(0)) }
         }
-        val newTreeIterator = createTreeIterator(repository, commit.tree.id)
-        val diffEntryItems = scanDiffEntries(repository, oldTreeIterator, newTreeIterator)
-        return CommitDiff(
-            id = commit.name,
-            subject = commit.shortMessage,
-            authorName = commit.authorIdent.name,
-            authoredAt = commit.authorIdent.whenAsInstant.toString(),
-            fileDiffItems = createFileDiffs(repository, diffEntryItems),
-        )
+        return repository.newObjectReader().use { objectReader ->
+            val oldTreeIterator = firstParent?.let { parent ->
+                createTreeIterator(objectReader, parent.tree.id)
+            } ?: EmptyTreeIterator()
+            val newTreeIterator = createTreeIterator(objectReader, commit.tree.id)
+            val diffEntryItems = scanDiffEntries(repository, oldTreeIterator, newTreeIterator)
+            CommitDiff(
+                id = commit.name,
+                subject = commit.shortMessage,
+                authorName = commit.authorIdent.name,
+                authoredAt = commit.authorIdent.whenAsInstant.toString(),
+                fileDiffItems = createFileDiffs(repository, diffEntryItems),
+            )
+        }
     }
 
     private fun DiffEntry.ChangeType.toFileDiffStatus(): FileDiffStatus = when (this) {
