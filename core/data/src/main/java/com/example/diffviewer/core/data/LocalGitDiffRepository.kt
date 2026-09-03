@@ -15,6 +15,7 @@ import com.example.diffviewer.core.domain.RepositoryDiff
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.IOException
+import java.time.Instant
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.eclipse.jgit.api.Git
@@ -294,7 +295,7 @@ class LocalGitDiffRepository(
         id = commit.name,
         subject = commit.shortMessage,
         authorName = commit.authorIdent.name,
-        authoredAt = commit.authorIdent.whenAsInstant.toString(),
+        authoredAt = Instant.ofEpochMilli(commit.authorIdent.when.time).toString(),
     )
 
     private fun createCommitDiff(repository: Repository, commit: RevCommit): CommitDiff {
@@ -314,7 +315,7 @@ class LocalGitDiffRepository(
                     id = parsedCommit.name,
                     subject = parsedCommit.shortMessage,
                     authorName = parsedCommit.authorIdent.name,
-                    authoredAt = parsedCommit.authorIdent.whenAsInstant.toString(),
+                    authoredAt = Instant.ofEpochMilli(parsedCommit.authorIdent.when.time).toString(),
                     fileDiffItems = createFileDiffs(repository, diffEntryItems),
                 )
             }
@@ -324,7 +325,7 @@ class LocalGitDiffRepository(
                 id = commit.name,
                 subject = commit.shortMessage,
                 authorName = commit.authorIdent.name,
-                authoredAt = commit.authorIdent.whenAsInstant.toString(),
+                authoredAt = Instant.ofEpochMilli(commit.authorIdent.when.time).toString(),
                 fileDiffItems = emptyList(),
             )
         }
