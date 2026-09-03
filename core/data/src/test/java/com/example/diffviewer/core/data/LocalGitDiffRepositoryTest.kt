@@ -42,7 +42,7 @@ class LocalGitDiffRepositoryTest {
         val untrackedFile = repositoryDiff.findSection(DiffSectionKind.UNTRACKED).fileDiffItems.single()
         assertEquals("untracked.txt", untrackedFile.path)
         assertEquals("untracked", untrackedFile.hunkItems.single().lineItems.single().content)
-        assertTrue(File(repositoryDirectory, ".git/index.lock").notExists())
+        assertTrue(!File(repositoryDirectory, ".git/index.lock").exists())
     }
 
     private fun createCommittedRepository(repositoryDirectory: File) {
