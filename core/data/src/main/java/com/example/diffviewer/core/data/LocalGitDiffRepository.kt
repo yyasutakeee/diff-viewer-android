@@ -79,7 +79,9 @@ class LocalGitDiffRepository(
         require(COMMIT_ID_PATTERN.matches(commitId)) { "コミットIDが不正です" }
         openSelectedRepository(repositoryPath).use { repository ->
             RevWalk(repository).use { revWalk ->
-                createCommitDiff(repository, revWalk.parseCommit(ObjectId.fromString(commitId)))
+                val commit = revWalk.parseCommit(ObjectId.fromString(commitId))
+                revWalk.parseTree(commit)
+                createCommitDiff(repository, commit)
             }
         }
     }
@@ -109,7 +111,9 @@ class LocalGitDiffRepository(
     private fun findLatestCommit(repository: Repository): RevCommit {
         val headId = repository.resolve(Constants.HEAD)
             ?: throw IOException("このリポジトリにはコミットがありません")
-        return RevWalk(repository).use { revWalk -> revWalk.parseCommit(headId) }
+        return RevWalk(repository).use { revWalk ->
+            revWalk.parseCommit(headId).also(revWalk::parseTree)
+        }
     }
 
     private fun findBranchName(repository: Repository): String =
@@ -296,7 +300,9 @@ class LocalGitDiffRepository(
         val firstParent = if (commit.parentCount == 0) {
             null
         } else {
-            RevWalk(repository).use { revWalk -> revWalk.parseCommit(commit.getParent(0)) }
+            RevWalk(repository).use { revWalk ->
+                revWalk.parseCommit(commit.getParent(0)).also(revWalk::parseTree)
+            }
         }
         return repository.newObjectReader().use { objectReader ->
             val oldTreeIterator = firstParent?.let { parent ->
