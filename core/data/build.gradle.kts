@@ -19,6 +19,7 @@ android {
 dependencies {
     implementation(project(":core:domain"))
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.2")
+    implementation("org.eclipse.jgit:org.eclipse.jgit:7.6.0.202603022253-r")
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.json:json:20240303")
 }

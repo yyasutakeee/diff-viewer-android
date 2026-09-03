@@ -6,7 +6,7 @@ import com.example.diffviewer.core.domain.DiffLineKind
 
 private val hunkHeaderPattern = Regex("^@@ -(\\d+)(?:,(\\d+))? \\+(\\d+)(?:,(\\d+))? @@.*$")
 
-internal fun parseGitHubPatch(patch: String): List<DiffHunk> {
+internal fun parseUnifiedPatch(patch: String): List<DiffHunk> {
     val diffHunkItems = mutableListOf<DiffHunk>()
     var currentHeader: String? = null
     var currentLineItems = mutableListOf<DiffLine>()

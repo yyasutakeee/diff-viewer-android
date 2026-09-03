@@ -50,6 +50,7 @@ fun RepositoryScreen(viewModel: RepositoryViewModel) {
     var token by rememberSaveable { mutableStateOf(repositoryUiState.token) }
     var githubRepositoryUrl by rememberSaveable { mutableStateOf(repositoryUiState.githubRepositoryUrl) }
     var githubToken by remember { mutableStateOf(repositoryUiState.githubToken) }
+    var localRepositoryPath by rememberSaveable { mutableStateOf(repositoryUiState.localRepositoryPath) }
     var selectedConnectionSource by rememberSaveable {
         mutableStateOf(repositoryUiState.repositoryConnectionSource)
     }
@@ -64,11 +65,13 @@ fun RepositoryScreen(viewModel: RepositoryViewModel) {
         repositoryUiState.token,
         repositoryUiState.githubRepositoryUrl,
         repositoryUiState.githubToken,
+        repositoryUiState.localRepositoryPath,
     ) {
         if (endpoint.isEmpty()) endpoint = repositoryUiState.endpoint
         if (token.isEmpty()) token = repositoryUiState.token
         if (githubRepositoryUrl.isEmpty()) githubRepositoryUrl = repositoryUiState.githubRepositoryUrl
         if (githubToken.isEmpty()) githubToken = repositoryUiState.githubToken
+        if (repositoryUiState.localRepositoryPath.isNotEmpty()) localRepositoryPath = repositoryUiState.localRepositoryPath
     }
     LaunchedEffect(
         repositoryUiState.workingTreeSectionItems,
@@ -99,7 +102,7 @@ fun RepositoryScreen(viewModel: RepositoryViewModel) {
             Text("Diff Viewer", style = MaterialTheme.typography.headlineMedium)
             Spacer(modifier = Modifier.height(4.dp))
             Text(
-                "TermuxまたはGitHubのGit変更を読み取り専用で表示します",
+                "端末内、Termux、GitHubのGit変更を読み取り専用で表示します",
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
@@ -108,6 +111,20 @@ fun RepositoryScreen(viewModel: RepositoryViewModel) {
         }
         item {
             when (selectedConnectionSource) {
+                RepositoryConnectionSource.LOCAL -> LocalConnectionCard(
+                    repositoryPath = localRepositoryPath,
+                    hasStorageAccess = repositoryUiState.hasLocalStorageAccess,
+                    isLoading = repositoryUiState.isLoading,
+                    requestStorageAccess = {
+                        viewModel.send(RepositoryEvent.RequestLocalStorageAccess)
+                    },
+                    chooseRepository = {
+                        viewModel.send(RepositoryEvent.ChooseLocalRepository)
+                    },
+                    refresh = {
+                        viewModel.send(RepositoryEvent.RefreshLocal(localRepositoryPath))
+                    },
+                )
                 RepositoryConnectionSource.TERMUX -> ConnectionCard(
                     endpoint = endpoint,
                     token = token,
@@ -138,8 +155,8 @@ fun RepositoryScreen(viewModel: RepositoryViewModel) {
             item {
                 DiffSourceSelector(
                     selectedSource = selectedSource,
-                    showWorkingTree = repositoryUiState.repositoryConnectionSource ==
-                        RepositoryConnectionSource.TERMUX,
+                    showWorkingTree = repositoryUiState.repositoryConnectionSource !=
+                        RepositoryConnectionSource.GITHUB,
                     onSelected = { selectedSource = it },
                 )
             }
@@ -325,6 +342,60 @@ private fun androidx.compose.foundation.lazy.LazyListScope.latestCommitItems(
     }
     if (latestCommitUiItem.fileItems.isEmpty()) {
         item { EmptyMessage("最新コミットに表示できる変更はありません") }
+    }
+}
+
+@Composable
+private fun LocalConnectionCard(
+    repositoryPath: String,
+    hasStorageAccess: Boolean,
+    isLoading: Boolean,
+    requestStorageAccess: () -> Unit,
+    chooseRepository: () -> Unit,
+    refresh: () -> Unit,
+) {
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            if (!hasStorageAccess) {
+                Text(
+                    "端末内のGitリポジトリを読むには、すべてのファイルへのアクセスを許可してください。",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                Button(onClick = requestStorageAccess, modifier = Modifier.fillMaxWidth()) {
+                    Text("ストレージアクセスを許可")
+                }
+            } else {
+                OutlinedTextField(
+                    value = repositoryPath,
+                    onValueChange = {},
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("Gitリポジトリ") },
+                    placeholder = { Text("フォルダを選択してください") },
+                    readOnly = true,
+                    maxLines = 2,
+                )
+                Button(onClick = chooseRepository, enabled = !isLoading, modifier = Modifier.fillMaxWidth()) {
+                    Text(if (repositoryPath.isEmpty()) "フォルダを選ぶ" else "別のフォルダを選ぶ")
+                }
+                Button(
+                    onClick = refresh,
+                    enabled = repositoryPath.isNotEmpty() && !isLoading,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    if (isLoading) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.width(20.dp).height(20.dp),
+                            strokeWidth = 2.dp,
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("読み込み中")
+                    } else {
+                        Text("端末内の変更を更新")
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -546,6 +617,7 @@ private fun ConnectionSourceSelector(
                 label = {
                     Text(
                         when (connectionSource) {
+                            RepositoryConnectionSource.LOCAL -> "端末内"
                             RepositoryConnectionSource.TERMUX -> "Termux"
                             RepositoryConnectionSource.GITHUB -> "GitHub"
                         }

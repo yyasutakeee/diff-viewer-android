@@ -27,6 +27,7 @@ data class AppState(
 class AppStore(
     private val diffRepository: DiffRepository,
     private val githubDiffRepository: DiffRepository,
+    private val localGitRepository: LocalGitRepository,
     private val githubRepositoryCatalog: GitHubRepositoryCatalog,
     private val connectionSettingsRepository: ConnectionSettingsRepository,
     private val coroutineScope: CoroutineScope,
@@ -138,6 +139,29 @@ class AppStore(
         }
     }
 
+    fun refreshLocalRepositoryDiff(repositoryPath: String) {
+        if (mutableState.value.isLoadingRepositoryDiff) return
+        val normalizedRepositoryPath = repositoryPath.trim()
+        if (normalizedRepositoryPath.isEmpty()) {
+            mutableState.value = mutableState.value.copy(
+                repositoryDiffErrorMessage = "端末内のGitリポジトリを選択してください",
+            )
+            return
+        }
+        val localConnectionSettings = mutableState.value.connectionSettings.copy(
+            localRepositoryPath = normalizedRepositoryPath,
+            repositorySource = RepositorySource.LOCAL,
+        )
+        connectionSettingsRepository.saveConnectionSettings(localConnectionSettings)
+        prepareRepositoryRefresh(localConnectionSettings)
+        coroutineScope.launch {
+            runCatching {
+                localGitRepository.fetchRepositoryDiff(normalizedRepositoryPath)
+            }.onSuccess(::applyRepositoryDiff)
+                .onFailure(::applyRepositoryDiffFailure)
+        }
+    }
+
     fun refreshGitHubRepositoryCatalog(githubToken: String) {
         if (mutableState.value.isLoadingGitHubRepositoryCatalog) return
         val normalizedGitHubToken = githubToken.trim()
@@ -178,6 +202,10 @@ class AppStore(
         coroutineScope.launch {
             runCatching {
                 when (currentState.connectionSettings.repositorySource) {
+                    RepositorySource.LOCAL -> localGitRepository.fetchCommitHistoryPage(
+                        repositoryPath = currentState.connectionSettings.localRepositoryPath,
+                        offset = nextOffset,
+                    )
                     RepositorySource.TERMUX -> diffRepository.fetchCommitHistoryPage(
                         endpoint = currentState.connectionSettings.endpoint,
                         token = currentState.connectionSettings.token,
@@ -221,6 +249,10 @@ class AppStore(
         coroutineScope.launch {
             runCatching {
                 when (currentState.connectionSettings.repositorySource) {
+                    RepositorySource.LOCAL -> localGitRepository.fetchCommitDiff(
+                        repositoryPath = currentState.connectionSettings.localRepositoryPath,
+                        commitId = commitId,
+                    )
                     RepositorySource.TERMUX -> diffRepository.fetchCommitDiff(
                         endpoint = currentState.connectionSettings.endpoint,
                         token = currentState.connectionSettings.token,
@@ -266,6 +298,22 @@ class AppStore(
             isLoadingRepositoryDiff = false,
             isLoadingCommitHistory = false,
             isLoadingSelectedCommit = false,
+            commitHistoryErrorMessage = null,
+        )
+    }
+
+    private fun prepareRepositoryRefresh(connectionSettings: ConnectionSettings) {
+        mutableState.value = mutableState.value.copy(
+            connectionSettings = connectionSettings,
+            repositoryDiff = null,
+            commitSummaryItems = emptyList(),
+            nextCommitHistoryOffset = null,
+            selectedCommitId = null,
+            selectedCommitDiff = null,
+            isLoadingRepositoryDiff = true,
+            isLoadingCommitHistory = false,
+            isLoadingSelectedCommit = false,
+            repositoryDiffErrorMessage = null,
             commitHistoryErrorMessage = null,
         )
     }

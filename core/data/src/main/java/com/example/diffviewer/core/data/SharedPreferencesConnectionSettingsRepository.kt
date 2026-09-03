@@ -16,6 +16,7 @@ class SharedPreferencesConnectionSettingsRepository(
             githubRepositoryUrl = sharedPreferences.getString(GITHUB_REPOSITORY_URL_KEY, DEFAULT_GITHUB_URL)
                 ?: DEFAULT_GITHUB_URL,
             githubToken = loadGitHubToken(),
+            localRepositoryPath = sharedPreferences.getString(LOCAL_REPOSITORY_PATH_KEY, "") ?: "",
             repositorySource = runCatching {
                 RepositorySource.valueOf(
                     sharedPreferences.getString(REPOSITORY_SOURCE_KEY, RepositorySource.TERMUX.name)
@@ -30,6 +31,7 @@ class SharedPreferencesConnectionSettingsRepository(
             .putString(ENDPOINT_KEY, connectionSettings.endpoint)
             .putString(TOKEN_KEY, connectionSettings.token)
             .putString(GITHUB_REPOSITORY_URL_KEY, connectionSettings.githubRepositoryUrl)
+            .putString(LOCAL_REPOSITORY_PATH_KEY, connectionSettings.localRepositoryPath)
             .putString(REPOSITORY_SOURCE_KEY, connectionSettings.repositorySource.name)
         if (connectionSettings.githubToken.isBlank()) {
             editor.remove(GITHUB_TOKEN_ENCRYPTED_KEY)
@@ -56,6 +58,7 @@ class SharedPreferencesConnectionSettingsRepository(
         const val DEFAULT_ENDPOINT = "http://127.0.0.1:8765"
         const val GITHUB_REPOSITORY_URL_KEY = "github_repository_url"
         const val GITHUB_TOKEN_ENCRYPTED_KEY = "github_token_encrypted"
+        const val LOCAL_REPOSITORY_PATH_KEY = "local_repository_path"
         const val REPOSITORY_SOURCE_KEY = "repository_source"
         const val DEFAULT_GITHUB_URL = "https://github.com/yyasutakeee/diff-viewer-android"
     }

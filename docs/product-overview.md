@@ -2,8 +2,9 @@
 
 ## Purpose
 
-Diff Viewer is an Android application for reviewing Git working-tree changes made in Termux, including changes
-made by Codex, and commit changes obtained directly from public or authorized private GitHub repositories.
+Diff Viewer is an Android application for reviewing Git working-tree changes stored in Android shared storage or
+made in Termux, including changes made by Codex, and commit changes obtained directly from public or authorized
+private GitHub repositories.
 
 The Termux terminal can display `git diff`, but a large diff eventually exceeds the useful terminal scrollback.
 This application provides a persistent, touch-friendly view in which the complete diff remains available for
@@ -26,37 +27,41 @@ conflicts.
 
 ## Agreed architecture
 
-Termux remains responsible for Git operations. A small helper process running in Termux invokes Git for an
-explicitly allowed repository and returns structured diff data through a localhost-only interface. The Android
-application requests that data and renders it.
+The Android application reads Git repositories in shared storage directly through JGit. For repositories inside
+Termux-private storage, a small helper process running in Termux invokes Git for an explicitly allowed repository
+and returns structured diff data through a localhost-only interface. The application also retains direct GitHub
+REST API access for remote committed history. Every data source is read-only.
 
 ```mermaid
 flowchart LR
-    A[Git working tree] --> B[Termux Git command]
+    A[Shared-storage Git working tree] --> D[Android Diff Viewer]
+    T[Termux-private Git working tree] --> B[Termux Git command]
     B --> C[Termux localhost helper]
-    C --> D[Android Diff Viewer]
+    C --> D
     G[GitHub REST API] --> D
     D --> E[File list and colored line diff]
 ```
 
-The local-helper path is preferred over implementing Git inside the Android application because it preserves Git
-CLI behavior, avoids parsing `.git` internals, and makes staged, unstaged, renamed, and binary changes easier to
-represent consistently. The direct GitHub path supplements it for committed remote history; it does not replace
-the helper for working-tree data.
+The direct local path is preferred for repositories under `/storage/emulated/0` because it requires no helper
+startup. JGit reads the work tree, index, objects, and references without exposing write operations through the
+application. The helper remains available for Termux-private paths that Android application sandboxing prevents
+the application from opening. The direct GitHub path supplements both local paths for committed remote history.
 
 ### Repository data sources
 
-The repository screen offers two read-only data sources:
+The repository screen offers three read-only data sources:
 
+- **On-device:** selects an existing Git working tree under `/storage/emulated/0`, then displays its unstaged,
+  staged, and untracked changes, latest commit, and first-parent commit history directly through JGit.
 - **Termux:** connects to the localhost helper and displays the working tree, latest commit, and first-parent
-  commit history.
+  commit history. This path supports repositories in Termux-private storage.
 - **GitHub:** accepts a `https://github.com/owner/repository` URL and reads the default branch's commits directly
   through the GitHub REST API. Public repositories work without a token. Private repositories require a
   fine-grained personal access token that is authorized for that repository with read-only **Metadata** and
   **Contents** permissions.
 
-The selected source and both sources' connection values are stored in private application preferences. Switching
-sources does not discard the other source's saved values. GitHub mode cannot display uncommitted working-tree
+The selected source and all sources' connection values are stored in private application preferences. Switching
+sources does not discard the other sources' saved values. GitHub mode cannot display uncommitted working-tree
 changes because those changes do not exist on GitHub; its available views are the latest commit and commit history.
 
 When a GitHub token is present, the connection card can request the authenticated account's accessible repository
@@ -78,7 +83,7 @@ ciphertext is placed in private application preferences. Plaintext tokens must n
 saved-instance state, GitHub Actions, or Slack. If the Keystore key and ciphertext no longer match, the application
 discards the unreadable saved token instead of exposing or repeatedly reusing it.
 
-### Local interface
+### Termux local interface
 
 The helper listens on `127.0.0.1:8765` by default and exposes `GET /api/v1/diff`, paged commit summaries through
 `GET /api/v1/commits?offset=<offset>`, and a selected commit's patch through
@@ -105,7 +110,7 @@ flowchart LR
     FU[":feature:filediff<br/>File diff UI contract"] --> A
     AU[":feature:alldiffs<br/>All-files diff UI contract"] --> A
     A --> S[":core:domain<br/>AppState and AppStore"]
-    A --> D[":core:data<br/>Termux and preferences"]
+    A --> D[":core:data<br/>Local Git, Termux, GitHub, and preferences"]
     D --> S
     RU --> DS[":core:designsystem"]
     FU --> DU[":core:diffui<br/>Shared diff presentation"]
@@ -120,8 +125,9 @@ application module is the only boundary that knows both feature display contract
 - `data class AppState` is the single shared-state snapshot.
 - `class AppStore` privately owns the mutable state flow and exposes a read-only state flow.
 - `class AppStore` actions are the only shared-state mutation entry points.
-- `interface DiffRepository` and `interface ConnectionSettingsRepository` are owned by the domain; concrete HTTP,
-  JSON, and SharedPreferences implementations live in `:core:data`.
+- `interface DiffRepository`, `interface LocalGitRepository`, and
+  `interface ConnectionSettingsRepository` are owned by the domain; concrete JGit, HTTP, JSON, and
+  SharedPreferences implementations live in `:core:data`.
 - `interface RepositoryViewModel`, `interface FileDiffViewModel`, and `interface AllDiffsViewModel` expose
   feature-owned display state and one `send(event)` input each. Their concrete adapters live in `:app`.
 - Repository selection and form editing remain presentation state rather than entering the domain snapshot.
@@ -194,13 +200,28 @@ The first useful version will target this repository and provide:
 14. Automatic latest-commit selection when the working tree has no changes.
 15. A paged commit-history selector that loads 20 summaries at a time and displays any selected commit against its
     first parent, including the repository's initial commit against an empty tree.
-16. A saved Termux/GitHub source switch that can show the default branch's latest commit and paged commit history
+16. A saved on-device/Termux/GitHub source switch that can show local changes or the default branch's commit history
     for a public or authorized private GitHub repository without starting the Termux helper.
 17. An authenticated, searchable repository picker that lists accessible public and private repositories in
     recently pushed order, while preserving direct URL entry.
+18. Direct, read-only display of existing Git repositories in Android shared storage without starting the Termux
+    helper, while retaining the helper and GitHub data sources.
 
-Untracked files must be represented explicitly. Plain `git diff` does not include their contents, so the Termux
-helper must handle them separately rather than making them silently disappear.
+Untracked files must be represented explicitly. Plain `git diff` does not include their contents, so each local
+data source must handle them separately rather than making them silently disappear.
+
+## On-device repository responsibilities
+
+The on-device data source must:
+
+- Request all-files access only for the user-selected personal-install workflow.
+- Accept only canonical repository roots under `/storage/emulated/0`.
+- Use JGit through a domain-owned read-only interface without exposing stage, commit, checkout, reset, fetch,
+  pull, push, configuration mutation, or other write operations.
+- Read unstaged, staged, untracked, latest-commit, and first-parent history data into the same domain values used
+  by the Termux and GitHub sources.
+- Keep binary and oversized untracked files visible without attempting to render unsafe or excessive text.
+- Persist the selected path and source in private application preferences.
 
 ## Termux helper responsibilities
 
@@ -224,7 +245,8 @@ The helper is part of the product even though it runs outside the APK. It must:
 The Android application must:
 
 - Treat helper responses as untrusted input and render them only as text.
-- Avoid requesting broad storage access because repository access belongs to Termux.
+- Use broad storage access only for the explicitly selected on-device source and only to read repositories under
+  Android shared storage.
 - Keep the UI responsive when parsing and rendering large diffs.
 - Use lazy lists or equivalent virtualization so the entire diff is not composed at once.
 - Preserve source text exactly where practical, including indentation and empty lines.

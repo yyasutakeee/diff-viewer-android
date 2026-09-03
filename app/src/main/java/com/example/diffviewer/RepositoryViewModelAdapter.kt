@@ -27,10 +27,13 @@ import kotlinx.coroutines.launch
 class RepositoryViewModelAdapter(
     private val appStore: AppStore,
     coroutineScope: CoroutineScope,
+    private var hasLocalStorageAccess: Boolean,
+    private val requestLocalStorageAccess: () -> Unit,
+    private val chooseLocalRepository: () -> Unit,
     private val openFile: (FileDiffSelectionTarget) -> Unit,
     private val openAllDiffs: (AllDiffsSelectionTarget) -> Unit,
 ) : RepositoryViewModel {
-    private val initialRepositoryUiMapping = mapRepositoryUiState(appStore.state.value)
+    private val initialRepositoryUiMapping = mapRepositoryUiState(appStore.state.value, hasLocalStorageAccess)
     private val mutableState = MutableStateFlow(initialRepositoryUiMapping.repositoryUiState)
     private var fileDiffSelectionTargetsById = initialRepositoryUiMapping.fileDiffSelectionTargetsById
     private var allDiffsSelectionTargetsBySource = initialRepositoryUiMapping.allDiffsSelectionTargetsBySource
@@ -40,16 +43,22 @@ class RepositoryViewModelAdapter(
     init {
         coroutineScope.launch {
             appStore.state.collect { appState ->
-                val repositoryUiMapping = mapRepositoryUiState(appState)
-                fileDiffSelectionTargetsById = repositoryUiMapping.fileDiffSelectionTargetsById
-                allDiffsSelectionTargetsBySource = repositoryUiMapping.allDiffsSelectionTargetsBySource
-                mutableState.value = repositoryUiMapping.repositoryUiState
+                applyUiMapping(mapRepositoryUiState(appState, hasLocalStorageAccess))
             }
         }
     }
 
+    fun updateLocalStorageAccess(hasLocalStorageAccess: Boolean) {
+        if (this.hasLocalStorageAccess == hasLocalStorageAccess) return
+        this.hasLocalStorageAccess = hasLocalStorageAccess
+        applyUiMapping(mapRepositoryUiState(appStore.state.value, hasLocalStorageAccess))
+    }
+
     override fun send(event: RepositoryEvent) {
         when (event) {
+            is RepositoryEvent.RefreshLocal -> appStore.refreshLocalRepositoryDiff(event.repositoryPath)
+            RepositoryEvent.RequestLocalStorageAccess -> requestLocalStorageAccess()
+            RepositoryEvent.ChooseLocalRepository -> chooseLocalRepository()
             is RepositoryEvent.Refresh -> appStore.refreshRepositoryDiff(
                 ConnectionSettings(endpoint = event.endpoint, token = event.token)
             )
@@ -68,6 +77,12 @@ class RepositoryViewModelAdapter(
                 findAllDiffsSelectionTarget(event.repositoryDiffSource)?.let(openAllDiffs)
             }
         }
+    }
+
+    private fun applyUiMapping(repositoryUiMapping: RepositoryUiMapping) {
+        fileDiffSelectionTargetsById = repositoryUiMapping.fileDiffSelectionTargetsById
+        allDiffsSelectionTargetsBySource = repositoryUiMapping.allDiffsSelectionTargetsBySource
+        mutableState.value = repositoryUiMapping.repositoryUiState
     }
 
     private fun findFileDiffSelectionTarget(fileId: String): FileDiffSelectionTarget? {
@@ -105,6 +120,7 @@ private data class RepositoryUiMapping(
 
 private fun mapRepositoryUiState(
     appState: AppState,
+    hasLocalStorageAccess: Boolean,
 ): RepositoryUiMapping {
     val fileDiffSelectionTargetsById = mutableMapOf<String, FileDiffSelectionTarget>()
     val repositoryDiff = appState.repositoryDiff
@@ -153,12 +169,15 @@ private fun mapRepositoryUiState(
         token = appState.connectionSettings.token,
         githubRepositoryUrl = appState.connectionSettings.githubRepositoryUrl,
         githubToken = appState.connectionSettings.githubToken,
+        localRepositoryPath = appState.connectionSettings.localRepositoryPath,
+        hasLocalStorageAccess = hasLocalStorageAccess,
         repositoryConnectionSource = appState.connectionSettings.repositorySource.toUiSource(),
         repositoryName = repositoryDiff?.repository?.substringAfterLast('/'),
         repositoryPath = repositoryDiff?.repository,
         branchSummary = repositoryDiff?.let { diff ->
             when (appState.connectionSettings.repositorySource) {
                 RepositorySource.TERMUX -> "${diff.branch} ・ ${diff.changedFileCount}ファイル変更"
+                RepositorySource.LOCAL -> "${diff.branch} ・ ${diff.changedFileCount}ファイル変更"
                 RepositorySource.GITHUB -> "${diff.branch} ・ GitHub"
             }
         },
@@ -262,6 +281,7 @@ private fun FileDiff.toUiItem(fileId: String): FileDiffUiItem = FileDiffUiItem(
 
 private fun RepositorySource.toUiSource(): RepositoryConnectionSource = when (this) {
     RepositorySource.TERMUX -> RepositoryConnectionSource.TERMUX
+    RepositorySource.LOCAL -> RepositoryConnectionSource.LOCAL
     RepositorySource.GITHUB -> RepositoryConnectionSource.GITHUB
 }
 

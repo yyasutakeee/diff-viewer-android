@@ -2,6 +2,7 @@ package com.example.diffviewer
 
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -20,6 +21,9 @@ fun DiffViewerApplication(
     appStore: AppStore,
     diffDisplaySettingsStore: DiffDisplaySettingsStore,
     coroutineScope: CoroutineScope,
+    hasLocalStorageAccess: Boolean,
+    requestLocalStorageAccess: () -> Unit,
+    chooseLocalRepository: () -> Unit,
 ) {
     var diffViewerDestination by remember {
         mutableStateOf<DiffViewerDestination>(DiffViewerDestination.Repository)
@@ -31,6 +35,9 @@ fun DiffViewerApplication(
         RepositoryViewModelAdapter(
             appStore = appStore,
             coroutineScope = coroutineScope,
+            hasLocalStorageAccess = hasLocalStorageAccess,
+            requestLocalStorageAccess = requestLocalStorageAccess,
+            chooseLocalRepository = chooseLocalRepository,
             openFile = { fileDiffSelectionTarget ->
                 diffViewerDestination = DiffViewerDestination.File(fileDiffSelectionTarget)
             },
@@ -38,6 +45,9 @@ fun DiffViewerApplication(
                 diffViewerDestination = DiffViewerDestination.All(allDiffsSelectionTarget)
             },
         )
+    }
+    LaunchedEffect(hasLocalStorageAccess) {
+        repositoryViewModelAdapter.updateLocalStorageAccess(hasLocalStorageAccess)
     }
     val decreaseFontSize = {
         diffFontSizeSp = (diffFontSizeSp - 1).coerceAtLeast(MINIMUM_DIFF_FONT_SIZE_SP)

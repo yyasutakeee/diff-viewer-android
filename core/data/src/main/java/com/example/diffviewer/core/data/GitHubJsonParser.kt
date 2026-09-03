@@ -82,7 +82,7 @@ private fun parseGitHubFileDiff(fileObject: JSONObject): FileDiff {
         contentUnavailableMessage = if (patch == null) {
             "GitHub APIからこのファイルの行差分が返されませんでした"
         } else null,
-        hunkItems = patch?.let(::parseGitHubPatch).orEmpty(),
+        hunkItems = patch?.let(::parseUnifiedPatch).orEmpty(),
     )
 }
 

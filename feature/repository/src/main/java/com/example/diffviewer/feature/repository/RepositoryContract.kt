@@ -8,6 +8,9 @@ interface RepositoryViewModel {
 }
 
 sealed interface RepositoryEvent {
+    data class RefreshLocal(val repositoryPath: String) : RepositoryEvent
+    data object RequestLocalStorageAccess : RepositoryEvent
+    data object ChooseLocalRepository : RepositoryEvent
     data class Refresh(val endpoint: String, val token: String) : RepositoryEvent
     data class RefreshGitHub(val repositoryUrl: String, val token: String) : RepositoryEvent
     data class RefreshGitHubRepositories(val token: String) : RepositoryEvent
@@ -19,6 +22,7 @@ sealed interface RepositoryEvent {
 }
 
 enum class RepositoryConnectionSource {
+    LOCAL,
     TERMUX,
     GITHUB,
 }
@@ -36,6 +40,8 @@ data class RepositoryUiState(
     val githubToken: String = "",
     val repositoryConnectionSource: RepositoryConnectionSource = RepositoryConnectionSource.TERMUX,
     val repositoryName: String? = null,
+    val localRepositoryPath: String = "",
+    val hasLocalStorageAccess: Boolean = false,
     val repositoryPath: String? = null,
     val branchSummary: String? = null,
     val latestCommit: CommitDiffUiItem? = null,

@@ -14,6 +14,12 @@ interface DiffRepository {
     ): CommitDiff
 }
 
+interface LocalGitRepository {
+    suspend fun fetchRepositoryDiff(repositoryPath: String): RepositoryDiff
+    suspend fun fetchCommitHistoryPage(repositoryPath: String, offset: Int): CommitHistoryPage
+    suspend fun fetchCommitDiff(repositoryPath: String, commitId: String): CommitDiff
+}
+
 interface ConnectionSettingsRepository {
     fun loadConnectionSettings(): ConnectionSettings
     fun saveConnectionSettings(connectionSettings: ConnectionSettings)
@@ -28,10 +34,12 @@ data class ConnectionSettings(
     val token: String = "",
     val githubRepositoryUrl: String = "https://github.com/yyasutakeee/diff-viewer-android",
     val githubToken: String = "",
+    val localRepositoryPath: String = "",
     val repositorySource: RepositorySource = RepositorySource.TERMUX,
 )
 
 enum class RepositorySource {
+    LOCAL,
     TERMUX,
     GITHUB,
 }

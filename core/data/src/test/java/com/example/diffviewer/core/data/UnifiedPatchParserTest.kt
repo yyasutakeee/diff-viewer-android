@@ -4,7 +4,7 @@ import com.example.diffviewer.core.domain.DiffLineKind
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
-class GitHubPatchParserTest {
+class UnifiedPatchParserTest {
     @Test
     fun parsesLineKindsAndLineNumbers() {
         val patch = """@@ -10,2 +10,3 @@ class Example
@@ -14,7 +14,7 @@ class GitHubPatchParserTest {
 +second value
 """.trimIndent()
 
-        val diffHunkItems = parseGitHubPatch(patch)
+        val diffHunkItems = parseUnifiedPatch(patch)
 
         assertEquals(1, diffHunkItems.size)
         assertEquals("@@ -10,2 +10,3 @@ class Example", diffHunkItems.single().header)
