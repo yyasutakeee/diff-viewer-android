@@ -22,6 +22,7 @@ data class AppState(
     val repositoryDiffErrorMessage: String? = null,
     val commitHistoryErrorMessage: String? = null,
     val githubRepositoryCatalogErrorMessage: String? = null,
+    val recentRepositoryItems: List<RecentRepository> = emptyList(),
 )
 
 class AppStore(
@@ -34,7 +35,10 @@ class AppStore(
 ) {
     private var githubRepositoryCatalogToken = ""
     private val mutableState = MutableStateFlow(
-        AppState(connectionSettings = connectionSettingsRepository.loadConnectionSettings())
+        AppState(
+            connectionSettings = connectionSettingsRepository.loadConnectionSettings(),
+            recentRepositoryItems = connectionSettingsRepository.loadRecentRepositories(),
+        )
     )
 
     val state: StateFlow<AppState> = mutableState.asStateFlow()
@@ -75,19 +79,7 @@ class AppStore(
                     endpoint = termuxConnectionSettings.endpoint,
                     token = termuxConnectionSettings.token,
                 )
-            }.onSuccess { repositoryDiff ->
-                mutableState.value = mutableState.value.copy(
-                    repositoryDiff = repositoryDiff,
-                    commitSummaryItems = repositoryDiff.commitHistoryPage.commitSummaryItems,
-                    nextCommitHistoryOffset = repositoryDiff.commitHistoryPage.nextOffset,
-                    selectedCommitId = null,
-                    selectedCommitDiff = null,
-                    isLoadingRepositoryDiff = false,
-                    isLoadingCommitHistory = false,
-                    isLoadingSelectedCommit = false,
-                    commitHistoryErrorMessage = null,
-                )
-            }.onFailure { error ->
+            }.onSuccess(::applyRepositoryDiff).onFailure { error ->
                 mutableState.value = mutableState.value.copy(
                     isLoadingRepositoryDiff = false,
                     repositoryDiffErrorMessage = error.message ?: "差分を取得できませんでした",
@@ -159,6 +151,19 @@ class AppStore(
                 localGitRepository.fetchRepositoryDiff(normalizedRepositoryPath)
             }.onSuccess(::applyRepositoryDiff)
                 .onFailure(::applyRepositoryDiffFailure)
+        }
+    }
+
+    fun openRecentRepository(recentRepository: RecentRepository) {
+        when (recentRepository.source) {
+            RepositorySource.LOCAL -> refreshLocalRepositoryDiff(recentRepository.location)
+            RepositorySource.TERMUX -> refreshRepositoryDiff(
+                mutableState.value.connectionSettings.copy(endpoint = recentRepository.location)
+            )
+            RepositorySource.GITHUB -> refreshGitHubRepositoryDiff(
+                githubRepositoryUrl = recentRepository.location,
+                githubToken = mutableState.value.connectionSettings.githubToken,
+            )
         }
     }
 
@@ -289,6 +294,8 @@ class AppStore(
     }
 
     private fun applyRepositoryDiff(repositoryDiff: RepositoryDiff) {
+        val recentRepositoryItems = updatedRecentRepositories(repositoryDiff)
+        connectionSettingsRepository.saveRecentRepositories(recentRepositoryItems)
         mutableState.value = mutableState.value.copy(
             repositoryDiff = repositoryDiff,
             commitSummaryItems = repositoryDiff.commitHistoryPage.commitSummaryItems,
@@ -299,7 +306,24 @@ class AppStore(
             isLoadingCommitHistory = false,
             isLoadingSelectedCommit = false,
             commitHistoryErrorMessage = null,
+            recentRepositoryItems = recentRepositoryItems,
         )
+    }
+
+    private fun updatedRecentRepositories(repositoryDiff: RepositoryDiff): List<RecentRepository> {
+        val connectionSettings = mutableState.value.connectionSettings
+        val recentRepository = RecentRepository(
+            source = connectionSettings.repositorySource,
+            name = repositoryDiff.repository.substringAfterLast('/'),
+            location = when (connectionSettings.repositorySource) {
+                RepositorySource.LOCAL -> connectionSettings.localRepositoryPath
+                RepositorySource.TERMUX -> connectionSettings.endpoint
+                RepositorySource.GITHUB -> connectionSettings.githubRepositoryUrl
+            },
+        )
+        return (listOf(recentRepository) + mutableState.value.recentRepositoryItems)
+            .distinctBy { item -> item.source to item.location }
+            .take(10)
     }
 
     private fun prepareRepositoryRefresh(connectionSettings: ConnectionSettings) {

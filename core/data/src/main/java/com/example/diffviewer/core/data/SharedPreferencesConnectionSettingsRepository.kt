@@ -4,6 +4,9 @@ import android.content.SharedPreferences
 import com.example.diffviewer.core.domain.ConnectionSettings
 import com.example.diffviewer.core.domain.ConnectionSettingsRepository
 import com.example.diffviewer.core.domain.RepositorySource
+import com.example.diffviewer.core.domain.RecentRepository
+import org.json.JSONArray
+import org.json.JSONObject
 
 class SharedPreferencesConnectionSettingsRepository(
     private val sharedPreferences: SharedPreferences,
@@ -44,6 +47,29 @@ class SharedPreferencesConnectionSettingsRepository(
         editor.apply()
     }
 
+    override fun loadRecentRepositories(): List<RecentRepository> {
+        val json = sharedPreferences.getString(RECENT_REPOSITORIES_KEY, null) ?: return emptyList()
+        return runCatching {
+            val jsonArray = JSONArray(json)
+            List(jsonArray.length()) { index ->
+                val item = jsonArray.getJSONObject(index)
+                RecentRepository(
+                    source = RepositorySource.valueOf(item.getString("source")),
+                    name = item.getString("name"),
+                    location = item.getString("location"),
+                )
+            }
+        }.getOrDefault(emptyList())
+    }
+
+    override fun saveRecentRepositories(recentRepositoryItems: List<RecentRepository>) {
+        val jsonArray = JSONArray()
+        recentRepositoryItems.forEach { item ->
+            jsonArray.put(JSONObject().put("source", item.source.name).put("name", item.name).put("location", item.location))
+        }
+        sharedPreferences.edit().putString(RECENT_REPOSITORIES_KEY, jsonArray.toString()).apply()
+    }
+
     private fun loadGitHubToken(): String {
         val encryptedToken = sharedPreferences.getString(GITHUB_TOKEN_ENCRYPTED_KEY, null) ?: return ""
         return runCatching { secretCipher.decrypt(encryptedToken) }.getOrElse {
@@ -61,5 +87,6 @@ class SharedPreferencesConnectionSettingsRepository(
         const val LOCAL_REPOSITORY_PATH_KEY = "local_repository_path"
         const val REPOSITORY_SOURCE_KEY = "repository_source"
         const val DEFAULT_GITHUB_URL = "https://github.com/yyasutakeee/diff-viewer-android"
+        const val RECENT_REPOSITORIES_KEY = "recent_repositories"
     }
 }

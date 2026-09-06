@@ -212,6 +212,9 @@ The first useful version will target this repository and provide:
     recently pushed order, while preserving direct URL entry.
 18. Direct, read-only display of existing Git repositories in Android shared storage without starting the Termux
     helper, while retaining the helper and GitHub data sources.
+19. A left-edge navigation drawer containing **Open Project** and **Recently Opened Projects**. Project selection
+    is removed from the main review content. Opening a project shows its working-tree changes when present and
+    otherwise selects the latest commit; working-tree navigation is never placed in the drawer.
 
 Untracked files must be represented explicitly. Plain `git diff` does not include their contents, so each local
 data source must handle them separately rather than making them silently disappear.

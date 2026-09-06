@@ -20,7 +20,7 @@ android {
         }
     }
 
-    sourceSets.named("main") {
+    sourceSets.getByName("main") {
         jniLibs.srcDir(rustJniLibraries)
     }
 

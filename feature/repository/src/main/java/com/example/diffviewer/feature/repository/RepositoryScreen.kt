@@ -22,6 +22,10 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.DrawerValue
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.ModalDrawerSheet
+import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -31,6 +35,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -42,6 +47,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.diffviewer.core.designsystem.AdditionTextColor
 import com.example.diffviewer.core.designsystem.DeletionTextColor
+import kotlinx.coroutines.launch
 
 @Composable
 fun RepositoryScreen(viewModel: RepositoryViewModel) {
@@ -55,6 +61,8 @@ fun RepositoryScreen(viewModel: RepositoryViewModel) {
         mutableStateOf(repositoryUiState.repositoryConnectionSource)
     }
     var isGitHubRepositoryPickerVisible by rememberSaveable { mutableStateOf(false) }
+    val drawerState = androidx.compose.material3.rememberDrawerState(DrawerValue.Closed)
+    val coroutineScope = rememberCoroutineScope()
     var selectedSource by rememberSaveable { mutableStateOf(DiffSource.WORKING_TREE) }
     val selectedRepositoryDiffSource = selectedSource.toRepositoryDiffSource(
         repositoryUiState.selectedCommit?.id
@@ -74,16 +82,13 @@ fun RepositoryScreen(viewModel: RepositoryViewModel) {
         if (repositoryUiState.localRepositoryPath.isNotEmpty()) localRepositoryPath = repositoryUiState.localRepositoryPath
     }
     LaunchedEffect(
+        repositoryUiState.repositoryPath,
         repositoryUiState.workingTreeSectionItems,
-        repositoryUiState.latestCommit,
     ) {
-        val workingTreeIsEmpty = repositoryUiState.workingTreeSectionItems.all { it.fileItems.isEmpty() }
-        if (
-            selectedSource == DiffSource.WORKING_TREE &&
-            workingTreeIsEmpty &&
-            repositoryUiState.latestCommit?.fileItems?.isNotEmpty() == true
-        ) {
-            selectedSource = DiffSource.LATEST_COMMIT
+        selectedSource = if (repositoryUiState.hasWorkingTreeChanges()) {
+            DiffSource.WORKING_TREE
+        } else {
+            DiffSource.LATEST_COMMIT
         }
     }
     LaunchedEffect(repositoryUiState.repositoryConnectionSource) {
@@ -93,61 +98,68 @@ fun RepositoryScreen(viewModel: RepositoryViewModel) {
         }
     }
 
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ModalNavigationDrawer(
+        drawerState = drawerState,
+        drawerContent = {
+            ModalDrawerSheet {
+                ProjectDrawer(
+                    repositoryUiState = repositoryUiState,
+                    selectedConnectionSource = selectedConnectionSource,
+                    endpoint = endpoint,
+                    token = token,
+                    githubRepositoryUrl = githubRepositoryUrl,
+                    githubToken = githubToken,
+                    localRepositoryPath = localRepositoryPath,
+                    selectConnectionSource = { selectedConnectionSource = it },
+                    updateEndpoint = { endpoint = it },
+                    updateToken = { token = it },
+                    updateGitHubRepositoryUrl = { githubRepositoryUrl = it },
+                    updateGitHubToken = { githubToken = it },
+                    requestStorageAccess = { viewModel.send(RepositoryEvent.RequestLocalStorageAccess) },
+                    chooseRepository = {
+                        coroutineScope.launch { drawerState.close() }
+                        viewModel.send(RepositoryEvent.ChooseLocalRepository)
+                    },
+                    refreshLocal = {
+                        coroutineScope.launch { drawerState.close() }
+                        viewModel.send(RepositoryEvent.RefreshLocal(localRepositoryPath))
+                    },
+                    refreshTermux = {
+                        coroutineScope.launch { drawerState.close() }
+                        viewModel.send(RepositoryEvent.Refresh(endpoint, token))
+                    },
+                    openGitHubRepositoryPicker = {
+                        coroutineScope.launch { drawerState.close() }
+                        isGitHubRepositoryPickerVisible = true
+                        viewModel.send(RepositoryEvent.RefreshGitHubRepositories(githubToken))
+                    },
+                    refreshGitHub = {
+                        coroutineScope.launch { drawerState.close() }
+                        viewModel.send(RepositoryEvent.RefreshGitHub(githubRepositoryUrl, githubToken))
+                    },
+                    openRecentProject = { projectId ->
+                        coroutineScope.launch { drawerState.close() }
+                        viewModel.send(RepositoryEvent.OpenRecentProject(projectId))
+                    },
+                )
+            }
+        },
     ) {
+      LazyColumn(
+          modifier = Modifier.fillMaxSize(),
+          contentPadding = PaddingValues(16.dp),
+          verticalArrangement = Arrangement.spacedBy(12.dp),
+      ) {
         item {
-            Text("Diff Viewer", style = MaterialTheme.typography.headlineMedium)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                IconButton(onClick = { coroutineScope.launch { drawerState.open() } }) { Text("☰") }
+                Text("Diff Viewer", style = MaterialTheme.typography.headlineMedium)
+            }
             Spacer(modifier = Modifier.height(4.dp))
             Text(
                 "端末内、Termux、GitHubのGit変更を読み取り専用で表示します",
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-        }
-        item {
-            ConnectionSourceSelector(selectedConnectionSource) { selectedConnectionSource = it }
-        }
-        item {
-            when (selectedConnectionSource) {
-                RepositoryConnectionSource.LOCAL -> LocalConnectionCard(
-                    repositoryPath = localRepositoryPath,
-                    hasStorageAccess = repositoryUiState.hasLocalStorageAccess,
-                    isLoading = repositoryUiState.isLoading,
-                    requestStorageAccess = {
-                        viewModel.send(RepositoryEvent.RequestLocalStorageAccess)
-                    },
-                    chooseRepository = {
-                        viewModel.send(RepositoryEvent.ChooseLocalRepository)
-                    },
-                    refresh = {
-                        viewModel.send(RepositoryEvent.RefreshLocal(localRepositoryPath))
-                    },
-                )
-                RepositoryConnectionSource.TERMUX -> ConnectionCard(
-                    endpoint = endpoint,
-                    token = token,
-                    isLoading = repositoryUiState.isLoading,
-                    onEndpointChange = { endpoint = it },
-                    onTokenChange = { token = it },
-                    onRefresh = { viewModel.send(RepositoryEvent.Refresh(endpoint, token)) },
-                )
-                RepositoryConnectionSource.GITHUB -> GitHubConnectionCard(
-                    repositoryUrl = githubRepositoryUrl,
-                    token = githubToken,
-                    isLoading = repositoryUiState.isLoading,
-                    onRepositoryUrlChange = { githubRepositoryUrl = it },
-                    onTokenChange = { githubToken = it },
-                    onOpenRepositoryPicker = {
-                        isGitHubRepositoryPickerVisible = true
-                        viewModel.send(RepositoryEvent.RefreshGitHubRepositories(githubToken))
-                    },
-                    onRefresh = {
-                        viewModel.send(RepositoryEvent.RefreshGitHub(githubRepositoryUrl, githubToken))
-                    },
-                )
-            }
         }
         repositoryUiState.errorMessage?.let { errorMessage -> item { ErrorCard(errorMessage) } }
         if (repositoryUiState.repositoryName != null) {
@@ -155,8 +167,7 @@ fun RepositoryScreen(viewModel: RepositoryViewModel) {
             item {
                 DiffSourceSelector(
                     selectedSource = selectedSource,
-                    showWorkingTree = repositoryUiState.repositoryConnectionSource !=
-                        RepositoryConnectionSource.GITHUB,
+                    showWorkingTree = repositoryUiState.hasWorkingTreeChanges(),
                     onSelected = { selectedSource = it },
                 )
             }
@@ -179,6 +190,7 @@ fun RepositoryScreen(viewModel: RepositoryViewModel) {
                 DiffSource.COMMIT_HISTORY -> commitHistoryItems(repositoryUiState, viewModel)
             }
         }
+      }
     }
     if (isGitHubRepositoryPickerVisible) {
         GitHubRepositoryPickerSheet(
@@ -342,6 +354,86 @@ private fun androidx.compose.foundation.lazy.LazyListScope.latestCommitItems(
     }
     if (latestCommitUiItem.fileItems.isEmpty()) {
         item { EmptyMessage("最新コミットに表示できる変更はありません") }
+    }
+}
+
+@Composable
+private fun ProjectDrawer(
+    repositoryUiState: RepositoryUiState,
+    selectedConnectionSource: RepositoryConnectionSource,
+    endpoint: String,
+    token: String,
+    githubRepositoryUrl: String,
+    githubToken: String,
+    localRepositoryPath: String,
+    selectConnectionSource: (RepositoryConnectionSource) -> Unit,
+    updateEndpoint: (String) -> Unit,
+    updateToken: (String) -> Unit,
+    updateGitHubRepositoryUrl: (String) -> Unit,
+    updateGitHubToken: (String) -> Unit,
+    requestStorageAccess: () -> Unit,
+    chooseRepository: () -> Unit,
+    refreshLocal: () -> Unit,
+    refreshTermux: () -> Unit,
+    openGitHubRepositoryPicker: () -> Unit,
+    refreshGitHub: () -> Unit,
+    openRecentProject: (String) -> Unit,
+) {
+    LazyColumn(
+        modifier = Modifier.width(340.dp).fillMaxHeight(),
+        contentPadding = PaddingValues(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        item { Text("Open Project", style = MaterialTheme.typography.titleLarge) }
+        item { ConnectionSourceSelector(selectedConnectionSource, selectConnectionSource) }
+        item {
+            when (selectedConnectionSource) {
+                RepositoryConnectionSource.LOCAL -> LocalConnectionCard(
+                    repositoryPath = localRepositoryPath,
+                    hasStorageAccess = repositoryUiState.hasLocalStorageAccess,
+                    isLoading = repositoryUiState.isLoading,
+                    requestStorageAccess = requestStorageAccess,
+                    chooseRepository = chooseRepository,
+                    refresh = refreshLocal,
+                )
+                RepositoryConnectionSource.TERMUX -> ConnectionCard(
+                    endpoint = endpoint,
+                    token = token,
+                    isLoading = repositoryUiState.isLoading,
+                    onEndpointChange = updateEndpoint,
+                    onTokenChange = updateToken,
+                    onRefresh = refreshTermux,
+                )
+                RepositoryConnectionSource.GITHUB -> GitHubConnectionCard(
+                    repositoryUrl = githubRepositoryUrl,
+                    token = githubToken,
+                    isLoading = repositoryUiState.isLoading,
+                    onRepositoryUrlChange = updateGitHubRepositoryUrl,
+                    onTokenChange = updateGitHubToken,
+                    onOpenRepositoryPicker = openGitHubRepositoryPicker,
+                    onRefresh = refreshGitHub,
+                )
+            }
+        }
+        item { Text("Recently Opened Projects", style = MaterialTheme.typography.titleMedium) }
+        if (repositoryUiState.recentProjectItems.isEmpty()) {
+            item { Text("最近開いたプロジェクトはありません") }
+        } else {
+            items(repositoryUiState.recentProjectItems, key = { item -> item.id }) { item ->
+                Card(modifier = Modifier.fillMaxWidth().clickable { openRecentProject(item.id) }) {
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        Text(item.name, style = MaterialTheme.typography.titleSmall)
+                        Text(
+                            "${item.sourceLabel} ・ ${item.location}",
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -725,3 +817,6 @@ private fun RepositoryUiState.hasFiles(diffSource: DiffSource): Boolean = when (
     DiffSource.LATEST_COMMIT -> latestCommit?.fileItems?.isNotEmpty() == true
     DiffSource.COMMIT_HISTORY -> selectedCommit?.fileItems?.isNotEmpty() == true
 }
+
+private fun RepositoryUiState.hasWorkingTreeChanges(): Boolean =
+    workingTreeSectionItems.any { diffSectionUiItem -> diffSectionUiItem.fileItems.isNotEmpty() }

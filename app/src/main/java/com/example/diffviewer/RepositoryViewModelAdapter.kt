@@ -8,6 +8,7 @@ import com.example.diffviewer.core.domain.DiffSectionKind
 import com.example.diffviewer.core.domain.FileDiff
 import com.example.diffviewer.core.domain.FileDiffStatus
 import com.example.diffviewer.core.domain.RepositorySource
+import com.example.diffviewer.core.domain.RecentRepository
 import com.example.diffviewer.feature.repository.DiffSectionUiItem
 import com.example.diffviewer.feature.repository.FileDiffUiItem
 import com.example.diffviewer.feature.repository.GitHubRepositoryUiItem
@@ -18,6 +19,7 @@ import com.example.diffviewer.feature.repository.RepositoryConnectionSource
 import com.example.diffviewer.feature.repository.RepositoryDiffSource
 import com.example.diffviewer.feature.repository.RepositoryUiState
 import com.example.diffviewer.feature.repository.RepositoryViewModel
+import com.example.diffviewer.feature.repository.RecentProjectUiItem
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -37,6 +39,7 @@ class RepositoryViewModelAdapter(
     private val mutableState = MutableStateFlow(initialRepositoryUiMapping.repositoryUiState)
     private var fileDiffSelectionTargetsById = initialRepositoryUiMapping.fileDiffSelectionTargetsById
     private var allDiffsSelectionTargetsBySource = initialRepositoryUiMapping.allDiffsSelectionTargetsBySource
+    private var recentRepositoriesById = initialRepositoryUiMapping.recentRepositoriesById
 
     override val state: StateFlow<RepositoryUiState> = mutableState.asStateFlow()
 
@@ -76,12 +79,16 @@ class RepositoryViewModelAdapter(
             is RepositoryEvent.OpenAllDiffs -> {
                 findAllDiffsSelectionTarget(event.repositoryDiffSource)?.let(openAllDiffs)
             }
+            is RepositoryEvent.OpenRecentProject -> {
+                recentRepositoriesById[event.projectId]?.let(appStore::openRecentRepository)
+            }
         }
     }
 
     private fun applyUiMapping(repositoryUiMapping: RepositoryUiMapping) {
         fileDiffSelectionTargetsById = repositoryUiMapping.fileDiffSelectionTargetsById
         allDiffsSelectionTargetsBySource = repositoryUiMapping.allDiffsSelectionTargetsBySource
+        recentRepositoriesById = repositoryUiMapping.recentRepositoriesById
         mutableState.value = repositoryUiMapping.repositoryUiState
     }
 
@@ -116,6 +123,7 @@ private data class RepositoryUiMapping(
     val repositoryUiState: RepositoryUiState,
     val fileDiffSelectionTargetsById: Map<String, FileDiffSelectionTarget>,
     val allDiffsSelectionTargetsBySource: Map<RepositoryDiffSource, AllDiffsSelectionTarget>,
+    val recentRepositoriesById: Map<String, RecentRepository>,
 )
 
 private fun mapRepositoryUiState(
@@ -210,12 +218,24 @@ private fun mapRepositoryUiState(
         commitHistoryErrorMessage = appState.commitHistoryErrorMessage,
         githubRepositoryErrorMessage = appState.githubRepositoryCatalogErrorMessage,
         hasMoreGitHubRepositories = appState.nextGitHubRepositoryCatalogPage != null,
+        recentProjectItems = appState.recentRepositoryItems.map { item ->
+            val id = "${item.source}:${item.location}"
+            RecentProjectUiItem(
+                id = id,
+                name = item.name,
+                sourceLabel = item.source.displayName(),
+                location = item.location,
+            )
+        },
     )
     val allDiffsSelectionTargetsBySource = buildAllDiffsSelectionTargets(appState)
     return RepositoryUiMapping(
         repositoryUiState = repositoryUiState,
         fileDiffSelectionTargetsById = fileDiffSelectionTargetsById,
         allDiffsSelectionTargetsBySource = allDiffsSelectionTargetsBySource,
+        recentRepositoriesById = appState.recentRepositoryItems.associateBy { item ->
+            "${item.source}:${item.location}"
+        },
     )
 }
 
@@ -283,6 +303,12 @@ private fun RepositorySource.toUiSource(): RepositoryConnectionSource = when (th
     RepositorySource.TERMUX -> RepositoryConnectionSource.TERMUX
     RepositorySource.LOCAL -> RepositoryConnectionSource.LOCAL
     RepositorySource.GITHUB -> RepositoryConnectionSource.GITHUB
+}
+
+private fun RepositorySource.displayName(): String = when (this) {
+    RepositorySource.LOCAL -> "端末内"
+    RepositorySource.TERMUX -> "Termux"
+    RepositorySource.GITHUB -> "GitHub"
 }
 
 private fun DiffSectionKind.displayName(): String = when (this) {

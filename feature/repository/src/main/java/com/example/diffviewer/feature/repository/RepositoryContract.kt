@@ -19,6 +19,7 @@ sealed interface RepositoryEvent {
     data class SelectCommit(val commitId: String) : RepositoryEvent
     data object LoadMoreCommits : RepositoryEvent
     data class OpenAllDiffs(val repositoryDiffSource: RepositoryDiffSource) : RepositoryEvent
+    data class OpenRecentProject(val projectId: String) : RepositoryEvent
 }
 
 enum class RepositoryConnectionSource {
@@ -58,6 +59,14 @@ data class RepositoryUiState(
     val commitHistoryErrorMessage: String? = null,
     val githubRepositoryErrorMessage: String? = null,
     val hasMoreGitHubRepositories: Boolean = false,
+    val recentProjectItems: List<RecentProjectUiItem> = emptyList(),
+)
+
+data class RecentProjectUiItem(
+    val id: String,
+    val name: String,
+    val sourceLabel: String,
+    val location: String,
 )
 
 data class GitHubRepositoryUiItem(

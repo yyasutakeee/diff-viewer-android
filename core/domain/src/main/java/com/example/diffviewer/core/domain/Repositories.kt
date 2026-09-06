@@ -23,6 +23,8 @@ interface LocalGitRepository {
 interface ConnectionSettingsRepository {
     fun loadConnectionSettings(): ConnectionSettings
     fun saveConnectionSettings(connectionSettings: ConnectionSettings)
+    fun loadRecentRepositories(): List<RecentRepository>
+    fun saveRecentRepositories(recentRepositoryItems: List<RecentRepository>)
 }
 
 interface GitHubRepositoryCatalog {
@@ -43,3 +45,9 @@ enum class RepositorySource {
     TERMUX,
     GITHUB,
 }
+
+data class RecentRepository(
+    val source: RepositorySource,
+    val name: String,
+    val location: String,
+)
