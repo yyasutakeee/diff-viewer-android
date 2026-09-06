@@ -60,6 +60,7 @@ private fun parseFileDiff(jsonObject: JSONObject): FileDiff = FileDiff(
     newPath = jsonObject.optionalString("newPath"),
     status = enumValueOf(jsonObject.getString("status").uppercase()),
     isBinary = jsonObject.getBoolean("isBinary"),
+    contentUnavailableMessage = jsonObject.optionalString("contentUnavailableMessage"),
     hunkItems = jsonObject.getJSONArray("hunks").mapObjects(::parseDiffHunk),
 )
 

@@ -6,6 +6,7 @@ build/
 captures/
 .externalNativeBuild/
 .cxx/
+target/
 app/build/
 apk/
 __pycache__/

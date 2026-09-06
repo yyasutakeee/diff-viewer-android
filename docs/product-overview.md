@@ -27,10 +27,14 @@ conflicts.
 
 ## Agreed architecture
 
-The Android application reads Git repositories in shared storage directly through JGit. For repositories inside
-Termux-private storage, a small helper process running in Termux invokes Git for an explicitly allowed repository
-and returns structured diff data through a localhost-only interface. The application also retains direct GitHub
-REST API access for remote committed history. Every data source is read-only.
+The Android application reads Git repositories in shared storage through a Rust `git2-rs/libgit2` library behind
+an instance-owned JNI bridge. For repositories inside Termux-private storage, a small helper process running in
+Termux invokes Git for an explicitly allowed repository and returns structured diff data through a localhost-only
+interface. The application also retains direct GitHub REST API access for remote committed history. Every data
+source is read-only.
+
+The native library is packaged for `arm64-v8a`, `armeabi-v7a`, and `x86_64` while preserving Android API 23 as the
+minimum. Its libgit2 build omits network features because the on-device source only reads existing repositories.
 
 ```mermaid
 flowchart LR
@@ -43,8 +47,10 @@ flowchart LR
 ```
 
 The direct local path is preferred for repositories under `/storage/emulated/0` because it requires no helper
-startup. JGit reads the work tree, index, objects, and references without exposing write operations through the
-application. The helper remains available for Termux-private paths that Android application sandboxing prevents
+startup. The Rust library reads the work tree, index, objects, and references with `git2-rs/libgit2`, then returns
+the same JSON contract used by the existing Kotlin parser. Kotlin owns only the JNI call and JSON-to-domain
+conversion. No stage, commit, checkout, reset, fetch, pull, push, or configuration-mutation operation is exposed.
+The helper remains available for Termux-private paths that Android application sandboxing prevents
 the application from opening. The direct GitHub path supplements both local paths for committed remote history.
 
 ### Repository data sources
@@ -52,7 +58,7 @@ the application from opening. The direct GitHub path supplements both local path
 The repository screen offers three read-only data sources:
 
 - **On-device:** selects an existing Git working tree under `/storage/emulated/0`, then displays its unstaged,
-  staged, and untracked changes, latest commit, and first-parent commit history directly through JGit.
+  staged, and untracked changes, latest commit, and first-parent commit history through `git2-rs/libgit2`.
 - **Termux:** connects to the localhost helper and displays the working tree, latest commit, and first-parent
   commit history. This path supports repositories in Termux-private storage.
 - **GitHub:** accepts a `https://github.com/owner/repository` URL and reads the default branch's commits directly
@@ -126,7 +132,7 @@ application module is the only boundary that knows both feature display contract
 - `class AppStore` privately owns the mutable state flow and exposes a read-only state flow.
 - `class AppStore` actions are the only shared-state mutation entry points.
 - `interface DiffRepository`, `interface LocalGitRepository`, and
-  `interface ConnectionSettingsRepository` are owned by the domain; concrete JGit, HTTP, JSON, and
+  `interface ConnectionSettingsRepository` are owned by the domain; concrete JNI/libgit2, HTTP, JSON, and
   SharedPreferences implementations live in `:core:data`.
 - `interface RepositoryViewModel`, `interface FileDiffViewModel`, and `interface AllDiffsViewModel` expose
   feature-owned display state and one `send(event)` input each. Their concrete adapters live in `:app`.
@@ -216,8 +222,8 @@ The on-device data source must:
 
 - Request all-files access only for the user-selected personal-install workflow.
 - Accept only canonical repository roots under `/storage/emulated/0`.
-- Use JGit through a domain-owned read-only interface without exposing stage, commit, checkout, reset, fetch,
-  pull, push, configuration mutation, or other write operations.
+- Use `git2-rs/libgit2` through a domain-owned read-only interface and an instance-owned JNI bridge without exposing
+  stage, commit, checkout, reset, fetch, pull, push, configuration mutation, or other write operations.
 - Read unstaged, staged, untracked, latest-commit, and first-parent history data into the same domain values used
   by the Termux and GitHub sources.
 - Keep binary and oversized untracked files visible without attempting to render unsafe or excessive text.
