@@ -55,6 +55,7 @@ abstract class BuildRustAndroidTask @Inject constructor(
     @TaskAction
     fun build() {
         execOperations.exec {
+            workingDir(manifestFile.get().asFile.parentFile)
             environment("CARGO_TARGET_DIR", cargoTargetDirectory.get().asFile.absolutePath)
             commandLine(
                 "cargo", "ndk", "--platform", "23",
@@ -63,7 +64,6 @@ abstract class BuildRustAndroidTask @Inject constructor(
                 "--target", "x86_64",
                 "--output-dir", outputDirectory.get().asFile.absolutePath,
                 "build", "--release", "--locked",
-                "--manifest-path", manifestFile.get().asFile.absolutePath,
             )
         }
     }
